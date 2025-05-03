@@ -1,0 +1,1 @@
+https://geoportal-hamburg.de/?Map/layerIds=19969,10220&visibility=true,true&transparency=0,0&Map/center=%5b566147.1821441485,5934987.580761852%5d&Map/zoomLevel=8#url
