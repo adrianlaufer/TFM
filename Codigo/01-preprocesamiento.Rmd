@@ -1,0 +1,644 @@
+---
+title: 'Análisis y predicción de los accidentes ciclistas en la ciudad de
+  Hamburgo - Preprocesamiento'
+author: "Adrian Läufer"
+date: "2025-05-02"
+output:
+  html_document: 
+  toc: true
+  theme: cerulean
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval=T, echo=T,comment = NULL)
+```
+
+```{css, echo=FALSE}
+h1{
+  font-size: 30px;
+  color:  #000080;
+}
+h2{
+  font-size: 25px;
+  color:#4169E1;
+}
+
+.author{
+  font-size: 25px;
+  color:#C71585;
+}
+
+.date{
+  color:#778899;
+}
+```
+
+
+# 1. Preprocesado de datos
+
+Para realizar el preprocesado de los datos, en primer lugar cargaremos las librerias que vamos a utilizar.
+```{r , echo=TRUE, warning=FALSE, message=FALSE}
+library(readr)      
+library(data.table) 
+library(utils)     
+library(sf)
+library(dplyr)
+library(purrr)
+library(lubridate)
+library(readxl)
+```
+
+## 1. Datos de accidentes
+
+Los datos utilizados sobre los accidentes en Alemania, han sido previamente descargados del portal destatis.de y han sido guardados en la carpeta Datos/Unfallatlas. Los archivos tienen todos un nombre y una estructura similar. Para cada año existe un zip donde se encuentra un archivo txt finalizado con _LinRef que contiene los datos de los accidentes. Para obtener los datos leemos este archivo y lo guardamos en una lista que posteriormente guardamos en un dataframe ("data_accidents") y en un csv.
+
+```{r , echo=TRUE}
+ruta_base <- "../Datos/Unfallatlas/"
+
+# Creamos una lista de los años de interés
+anios <- 2016:2023  
+
+lista_datos <- list()
+
+# Carpeta temporal para extraer archivos
+temp_dir <- tempdir()
+
+# Iteramos sobre los años y leemos los archivos ZIP
+for (anio in anios) {  
+  archivo_zip <- paste0(ruta_base, "Unfallorte", anio, "_EPSG25832_CSV.zip")
+  
+  if (file.exists(archivo_zip)) {
+
+    archivos_en_zip <- unzip(archivo_zip, list = TRUE)$Name
+    
+    # Determinamos el archivo correcto según el año
+    if (anio == 2016) {
+      archivo_csv <- archivos_en_zip[grepl("Unfallorte_2016_LinRef.txt$", archivos_en_zip)]
+    } else if (anio >= 2017 & anio <= 2019) {
+      archivo_csv <- archivos_en_zip[grepl(paste0("Unfallorte", anio, "_LinRef.txt$"), archivos_en_zip)]
+    } else if (anio == 2021) {
+      archivo_csv <- archivos_en_zip[grepl(paste0("Unfallorte_", anio, "_LinRef.txt$"), archivos_en_zip)]
+    } else {
+      archivo_csv <- archivos_en_zip[grepl(".csv$", archivos_en_zip, ignore.case = TRUE)]
+    }
+    
+    if (length(archivo_csv) > 0) {
+      # Extraemos el archivo CSV correcto
+      archivo_extraido <- unzip(archivo_zip, files = archivo_csv, exdir = temp_dir)
+      
+      datos <- fread(archivo_extraido)
+      
+      # Agregamos el año como columna extra
+      datos[, Anio := anio]  
+      
+      # Guardamos en la lista
+      lista_datos[[as.character(anio)]] <- datos
+    } else {
+      warning(sprintf("No se encontró un archivo CSV en: %s", archivo_zip))
+    }
+  } else {
+    warning(sprintf("Archivo ZIP no encontrado: %s", archivo_zip))
+  }
+}
+
+# Combinamos la lista en un único data.table.
+if (length(lista_datos) > 0) {
+  data_accidents <- rbindlist(lista_datos, use.names = TRUE, fill = TRUE)
+  
+  # Guardamos en CSV
+  fwrite(data_accidents, "../Datos/data_accidents.csv")
+  
+  print("Archivo guardado exitosamente.")
+} else {
+  print("No se encontraron archivos de datos para procesar.")
+}
+```
+Para ver la estructura interna y ver un resumen estadístico de los datos de los accidentes, ejecutamos los comandos str() y summary().
+
+```{r, echo=TRUE}
+str(data_accidents)
+```
+```{r, echo=TRUE}
+summary(data_accidents)
+```
+
+La variable ULAND define el estado donde ha pasado el accidente y IstRad define si ha estado involucrada una bicicleta. Para considerar los accidentes ciclistas en Hamburgo filtramos los datos según ULAND == 2 y IstRad == 1.
+
+```{r, echo=TRUE}
+accidents_bike_HH <- data_accidents %>% filter(ULAND == 2 & IstRad == 1)
+```
+
+Los datos obtenidos hasta ahora, no incluyen el dia exacto cuando ocurrió el accidente, sino sólo el año, mes y día de la semana. Destatis nos facilitó posteriormente una tabla csv con la fecha exacta de los accidentes ocurridos entre 2020 y 2023. Para tener en cuenta esta información cargaremos la tabla mencionada y la uniremos según el identificador con la tabla anterior.
+
+```{r, echo=TRUE}
+# Leemos la tabla
+archivo <- paste0(ruta_base, "Unfallorte_HH_2020-2023.csv")
+accidents_by_day <- fread(archivo)
+
+# Filtramos los accidentes ciclistas (la tabla ya nos proprociona sólo los accidentes ocurridos en Hamburgo)
+accidents_by_day <- accidents_by_day %>% filter(IstRad == 1)
+
+# Adaptamos las variables UIDENSTLAE para posteriormente realizar la unión mediante esta variable.
+accidents_bike_HH$UIDENTSTLAE <- as.numeric(accidents_bike_HH$UIDENTSTLAE)
+accidents_by_day$UIDENTSTLAE <- as.numeric(accidents_by_day$UIDENTSTLAE)
+accidents_bike_HH <- accidents_bike_HH %>%
+  left_join(accidents_by_day %>%
+              select(UIDENTSTLAE, UJAHR, UMONAT, USTUNDE, UWOCHENTAG, Wochentag), 
+            by = c("UIDENTSTLAE", "UJAHR", "UMONAT", "USTUNDE", "UWOCHENTAG"))
+
+# Renombramos la columnas Wochentag en day
+accidents_bike_HH <- accidents_bike_HH %>% rename(day = Wochentag)
+```
+
+Una vez realizada esta unión, seleccionaremos sólo las columnas que son de interés y renombraremos las variales a considerar:
+
+```{r, echo=TRUE}
+# Eliminamos las columnas que no nos interesan
+accidents_bike_HH <- accidents_bike_HH %>% select(-c(ULAND, OBJECTID_1, PLST , OID_, UIDENTSTLA, UIDENTSTLAE, IstRad, OBJECTID, IstSonstige, ULICHTVERH, IstStrasse, -IstGkfz, LICHT, STRZUSTAND, Anio))
+
+# Renombramos las columnas
+accidents_bike_HH <- accidents_bike_HH %>% rename(admin_region = UREGBEZ)
+accidents_bike_HH <- accidents_bike_HH %>% rename(admin_district = UKREIS)
+accidents_bike_HH <- accidents_bike_HH %>% rename(municipality = UGEMEINDE)
+accidents_bike_HH <- accidents_bike_HH %>% rename(category = UKATEGORIE)
+accidents_bike_HH <- accidents_bike_HH %>% rename(year = UJAHR)
+accidents_bike_HH <- accidents_bike_HH %>% rename(month = UMONAT)
+accidents_bike_HH <- accidents_bike_HH %>% rename(hour = USTUNDE)
+accidents_bike_HH <- accidents_bike_HH %>% rename(day_week = UWOCHENTAG)
+accidents_bike_HH <- accidents_bike_HH %>% rename(kind_accident = UART)
+accidents_bike_HH <- accidents_bike_HH %>% rename(type_accident = UTYP1)
+accidents_bike_HH <- accidents_bike_HH %>% rename(accident_car = IstPKW)
+accidents_bike_HH <- accidents_bike_HH %>% rename(accident_passenger = IstFuss)
+accidents_bike_HH <- accidents_bike_HH %>% rename(accident_motor = IstKrad)
+accidents_bike_HH <- accidents_bike_HH %>% rename(accident_goodsroad = IstGkfz)
+accidents_bike_HH <- accidents_bike_HH %>% rename(accident_other = IstSonstig)
+accidents_bike_HH <- accidents_bike_HH %>% rename(road_surface_condition = IstStrassenzustand)
+```
+
+Para los accidentes entre 2016 y 2019 nos falta la información del dia concreto en el cuál ha sucedido el accidente. A partir de la información año, mes y dia de la semana, creamos una función que nos determine de forma aleatoria un dia de los 4 o 5 que pueden ser. De esta forma definiremos el día concreto donde sucedió el accidente para el resto de fechas.
+
+```{r, echo=TRUE}
+# Función para obtener un día aleatorio que coincida con el día de la semana
+get_random_day <- function(year, month, weekday) {
+  # Creamos una secuencia de fechas en el mes
+  dates_in_month <- seq.Date(from = as.Date(sprintf("%04d-%02d-01", year, month)),
+                             to   = as.Date(sprintf("%04d-%02d-%02d", year, month, days_in_month(ymd(sprintf("%04d-%02d-01", year, month))))),
+                             by = "day")
+  
+  # Encontramos los días que coinciden con day_week
+  matching_days <- dates_in_month[wday(dates_in_month, week_start = 1) %% 7 + 1 == weekday]
+  
+  # Elegimos uno al azar
+  if (length(matching_days) > 0) {
+    return(day(sample(matching_days, 1)))
+  } else {
+    return(NA_integer_)
+  }
+}
+
+
+
+# Aplicamos al data.frame
+accidents_bike_HH <- accidents_bike_HH %>%
+  rowwise() %>%
+  mutate(day = if_else(is.na(day), get_random_day(year, month, day_week), day)) %>%
+  ungroup()
+```
+
+Una vez realizada esta operación, finalizamos el preprocesado de los datos de los accidentes de tráfico y lo guardamos en un csv por si hiciese falta recuperar los datos.
+
+```{r , echo=TRUE}
+write.csv(accidents_bike_HH, "accidents_bike_HH.csv", row.names = TRUE)
+```
+
+## 2. Datos de la infraestructura
+
+Los datos disponibles de la infraestructura ciclista en Hamburgo han sido descargados del Geoportal de la ciudad de Hamburgo y están todos almacenados en un csv. 
+
+```{r, echo=TRUE}
+ruta_base <- "../Datos/Radinfraestruktur/"
+
+archivo <- paste0(ruta_base, "HH_WFS_Radverkehrsnetz.csv")
+
+data_infra <- fread(archivo)
+```
+
+Vemos la estructura interna y un resumen estadístico de los datos de la infraestructura, ejecutando str() y summary().
+
+```{r, echo=TRUE}
+str(data_infra)
+```
+```{r, echo=TRUE}
+summary(data_infra)
+```
+Tal y como hemos podido ver, los datos de la infraestructura tienen una columna "geom" que nos da la geometria de la infraestructura. No obstante, esta columna ha sido identificada como texto. Para poder utilizar está información y representarla en un mapa, debemos de convertirla en geometria espacial, asignarle posteriormente el sistema de coordenadas original (equivalente al 25832, es decir ETRS89 / UTM 32N, véase también para ello la columna coordinate_reference_system) y finalmente transformarlo a coordenadas geográficas.
+
+
+
+```{r , echo=TRUE}
+# Filtramos solo los valores con una geom no nula
+data_infra <- data_infra %>% filter(!is.na(geom) & geom != "")
+
+# Convertimos la columna geom (WKT) a geometría espacial
+data_infra$geometry <- st_as_sfc(data_infra$geom)
+
+# Asignamos UTM 32N
+st_crs(data_infra$geometry) <- 25832  
+
+# Convertimos a latitude / longitud
+data_infra$geometry <- st_transform(data_infra$geometry, 4326)
+```
+
+Una vez realizadas estas operaciones, podemos transformar el data frame en un objeto sf, que es el tipioc para representar información geoespacial en R.
+
+```{r , echo=TRUE}
+data_infra_sf <- st_as_sf(data_infra)
+```
+
+En los datos de la infraestructura, el tipo de via ciclista es primordial. Para poder utilizarlo posteriormente en nuestro trabajo, traducimos los valores en alemán al castellano.
+
+```{r, echo=TRUE}
+data_infra_sf <- data_infra_sf %>%
+  mutate(klasse = case_when(
+    klasse == "Fahrradstraße" ~ "Calle para bicicletas",
+    klasse == "Radfahrstreifen" ~ "Carril bici en calzada",
+    klasse == "Radweg Schiebestrecke mit Verbindungsfunktion" ~ "Otros",
+    klasse == "Schutzstreifen" ~ "Carril protegido",
+    klasse == "Sonstige" ~ "Otros",
+    klasse == "Sonstige mit zeitlicher Beschränkung" ~ "Otros con restricción temporal",
+    klasse == "Straße mit Mischverkehr ab 50 km/h" ~ "Calle de tráfico mixto > 50 km/h",
+    klasse == "Straße mit Mischverkehr bis 30km/h" ~ "Calle de tráfico mixto ≤ 30 km/h",
+    klasse == "Wege in Grünflächen" ~ "Camino en áreas verdes",
+    TRUE ~ "Otros" # Por si hay algo más
+  ))
+
+```
+
+Guardamos los datos de la infraestructura en un csv.
+
+```{r, echo=TRUE}
+# Guardamos en CSV
+fwrite(data_infra_sf, "../Datos/data_infrastructure.csv")
+```
+
+Una vez realizadas estas operaciones, nos gustaria relacionar los accidentes con el tipo de infraestructura donde ha pasado. Para ello, utilizaremos las funciones de sf, en concreto st_is_within_distance, que obtiene las intersecciones entre los accidentes y la infraestructura. Para ello establecemos un umbral de distancia, que mide practicamente las infraetructuras que interseccionan con el punto del accidente en la distancia establecida como umbral de distancia. Tras varios intentos con diferentes distancias, se ha establecido un umbral de 15 metros, para que la mayoria de accidentes tengan un tipo de infraestructura asignada.
+
+```{r , echo=TRUE}
+# Establecemos un umbral de distancia en metros 
+umbral_distancia <- 15
+
+# Convertimos a un objeto sf
+accidents_bike_HH_sf <- st_as_sf(accidents_bike_HH, coords = c("XGCSWGS84", "YGCSWGS84"), crs = st_crs(data_infra_sf))
+
+# Usamos st_is_within_distance para verificar si los accidentes están dentro del umbral de distancia
+intersect_indices <- st_is_within_distance(accidents_bike_HH_sf, data_infra_sf, dist = umbral_distancia)
+
+# Creamos un vector con índice del elemento más cercano (o NA si no hay ninguno)
+nearest_indices <- sapply(intersect_indices, function(x) if (length(x) > 0) x[1] else NA)
+
+# Creamos un dataframe con los índices y las columnas deseadas de datos_infra_sf
+atributos_infra <- data_infra_sf[nearest_indices, ]  
+```
+
+Una vez obtenida la intersección, juntamos los datos de los accidentes, con los datos de las intersecciones obtenidas.
+
+```{r , echo=TRUE}
+accidents_infrastructure <- cbind(accidents_bike_HH_sf, st_drop_geometry(atributos_infra)) 
+```
+
+A continuación eliminamos las variables que no son de interés o que no contienen suficiente información y renombramos las columnas restantes.
+
+```{r, echo=TRUE}
+# Eliminamos las columnas que no son de interés
+accidents_infrastructure <- accidents_infrastructure %>% select(-source, -target, -status, -fuehrungsart, -benutzungspflicht, -mofa_frei,-radweg_in_mittellage, -hindernis, -niveau,-zeitbeschraenkung, -radrouten, -netzklasse, -klasse_id, -coordinate_reference_system, -zweirichtung, -radweg_art)
+
+# Renombramos las columnas
+accidents_infrastructure <- accidents_infrastructure %>% rename(street_name = strassenname)
+accidents_infrastructure <- accidents_infrastructure %>% rename(type_bikelane = klasse)
+accidents_infrastructure <- accidents_infrastructure %>% rename(width = breite)
+accidents_infrastructure <- accidents_infrastructure %>% rename(direction = richtung)
+accidents_infrastructure <- accidents_infrastructure %>% rename(surface = oberflaeche)
+```
+
+Guardmos finalmente los datos para poderlos utilizar posteriormente.
+
+```{r , echo=TRUE}
+write.csv(accidents_infrastructure, "accidents_infrastructure.csv", row.names = TRUE)
+
+```
+
+## 3. Datos del clima
+
+Los datos que vamos a utilizar del clima, han sido previamente descargados del portal https://opendata.dwd.de del servicio meteorológico de Alemania y guardados en la carpeta Datos/Wetter. Se trata de múltiples archivos zip que contienen cantidad de información desde la temperatura hasta las mediciones de viento o de horas solares.
+
+
+```{r, echo=TRUE}
+ruta_base <- "../Datos/Wetter/"
+
+# Obtenemos la lista de archivos zip en el directorio
+archivos_zip <- list.files(ruta_base, pattern = "\\.zip$", full.names = TRUE)
+```
+
+
+Los archivos obtenidos se encuentran en formato zip. Dentro de los archivos zip se encuentra un archivo cuyo nombre contiene la palabra "produkt" que contiene la información. Para leer los archivos se crea una función que extraiga estos datos:
+
+```{r, echo=TRUE}
+# Creamos una función para extraer los datos
+leer_archivo_produkt <- function(zipfile) {
+  contenido <- unzip(zipfile, list = TRUE)
+  nombre_archivo <- contenido$Name[grep("^produkt", contenido$Name)]
+  
+  if (length(nombre_archivo) > 0) {
+    nombre_archivo <- nombre_archivo[1]
+    con <- unz(zipfile, nombre_archivo)
+    # Cambiamos la codificación a "latin1" o prueba "ISO-8859-1"
+    lineas <- iconv(readLines(con, encoding = "latin1"), from = "latin1", to = "UTF-8")
+    close(con)
+    
+    # Separamos la cabecera (primer línea) usando "." como separador
+    cabecera <- strsplit(lineas[1], split = ";")[[1]]
+    cabecera <- trimws(cabecera)
+    # Eliminamos el último elemento si es "eor"
+    if(tolower(tail(cabecera, 1)) == "eor") {
+      cabecera <- cabecera[-length(cabecera)]
+    }
+    
+    # Combinamos las líneas restantes para leerlas con read.table usando ";" como separador
+    datos_texto <- paste(lineas[-1], collapse = "\n")
+    datos <- read.table(text = datos_texto,
+                        sep = ";",
+                        header = TRUE,
+                        stringsAsFactors = TRUE,
+                        fill = TRUE)
+    
+    names(datos) <- cabecera
+    return(datos)
+  } else {
+    warning(paste("No se encontró un archivo que empiece con 'produkt' en", zipfile))
+    return(NULL)
+  }
+}
+
+```
+
+Aplicamos la función creada y la aplicamos a todos los archivos descargados, creando una lista con los datos del clima.
+
+```{r, echo=TRUE}
+# Aplicamos la función a todos los archivos zip y obtenemos una lista de data frames
+lista_clima <- lapply(archivos_zip, leer_archivo_produkt)
+```
+
+De la lista eliminamos los valores nulos, normalizamos las fechas y eliminamos columnas nulas dentro de los data frames.
+
+```{r, echo=TRUE}
+# Eliminamos los posibles NULL de la lista
+lista_clima <- Filter(Negate(is.null), lista_clima)
+
+# Normalizamos la fecha
+lista_clima <- map(lista_clima, function(df) {
+  if ("MESS_DATUM" %in% names(df)) {
+    # Forzamos a character (por si viene como factor o int)
+    df$MESS_DATUM <- as.character(df$MESS_DATUM)
+    
+    # Extraemos solo los primeros 10 caracteres (ignora lo que venga después)
+    df$MESS_DATUM <- substr(df$MESS_DATUM, 1, 10)
+    
+    # Convertimos a integer
+    df$MESS_DATUM <- as.integer(df$MESS_DATUM)
+  }
+  return(df)
+})
+
+# Eliminamos las columnas nulas
+lista_clima <- lapply(lista_clima, function(df) {
+  if (any(is.na(names(df)))) {
+    df <- df[ , !is.na(names(df))]
+  }
+  return(df)
+})
+
+```
+
+Eliminamos varias columnas que no son de interés dentro de cada data frame de la lista, como QN que indica la calidad de los valores y STATIONS_ID que indica la estación donde se realizaron las medidas. En nuestro caso, la estación es siempre la misma, por ello esta información no es relevante para el futuro.
+
+```{r, echo=TRUE}
+lista_clima <- lapply(lista_clima, function(df) {
+  # Columnas que empiezan por QN
+  cols_qn <- grep("^QN", names(df), value = TRUE)
+  
+  # Columnas igual a STATIONS_ID (sin importar mayúsculas/minúsculas)
+  cols_station <- names(df)[tolower(names(df)) == "stations_id"]
+  
+  # Unimos todas las columnas a quitar
+  cols_a_quitar <- union(cols_qn, cols_station)
+  
+  # Eliminar
+  df <- df[ , !(names(df) %in% cols_a_quitar)]
+  return(df)
+})
+```
+
+Creamos un dataframe uniendo todos los datas frames de la lista_clima.
+
+```{r , echo=TRUE}
+# Unimos los dataframes usando full_join para unir todos los dataframes por MESS_DATUM
+data_clima <- reduce(lista_clima, function(x, y) {
+  full_join(x, y, by = "MESS_DATUM")
+})
+
+```
+
+Vemos la estructura interna y un resumen estadístico de los datos del clima, ejecutando str() y summary().
+
+```{r , echo=TRUE}
+str(data_clima)
+```
+
+```{r , echo=TRUE}
+summary(data_clima)
+```
+
+Extraemos el año, mes, dia y hora de los datos climáticos y posteriormente filtramos los datos climáticos a partir de 2016.
+
+```{r, echo=TRUE}
+data_clima <- data_clima %>%
+  mutate(
+    year = as.integer(substr(MESS_DATUM, 1, 4)),
+    month = as.integer(substr(MESS_DATUM, 5, 6)),
+    day = as.integer(substr(MESS_DATUM, 7, 8)),
+    hour = as.integer(substr(MESS_DATUM, 9, 10))
+  )
+
+data_clima <- data_clima %>%
+  filter(year >= 2016)
+```
+
+Convertimos los valores -999 en valores NA.
+
+```{r , echo=TRUE}
+data_clima[data_clima == -999] <- NA
+```
+
+A continuación eliminamos las columnas que no son de interés y renombramos aquellas que si lo son:
+
+```{r , echo=TRUE}
+# Eliminamos las columnas que no son de interés
+data_clima <- data_clima %>%
+  select(-RS_IND, -WRTR, -ATMO_LBERG, -FD_LBERG, -SD_LBERG, -MESS_DATUM_WOZ, -V_N_I, -V_N, -MESS_DATUM, -VP_STD, -P_STD, -TD_STD, -WW, -TF_STD, -TT_STD, -RF_STD, -P0, -V_VV_I, -FG_LBERG,-ABSF_STD, -ZENIT)
+
+# Renombramos las columnas
+data_clima <- data_clima %>% rename(temperature = TT_TU)
+data_clima <- data_clima %>% rename(humidity = RF_TU)
+data_clima <- data_clima %>% rename(rainfall = R1)
+data_clima <- data_clima %>% rename(pressure = P)
+data_clima <- data_clima %>% rename(weather_description = WW_Text)
+data_clima <- data_clima %>% rename(sunshine_minutes = SD_SO)
+data_clima <- data_clima %>% rename(visibility = V_VV)
+
+```
+
+Traducimos y simplificamos los valores en la variable "weather_description":
+```{r , echo=TRUE}
+# Cambiamos los valores en la descripcion del tiempo
+data_clima$weather_description[grepl("Schneeregen", data_clima$weather_description)] <- "agua nieve"
+data_clima$weather_description[grepl("Schnee", data_clima$weather_description)] <- "nieve"
+data_clima$weather_description[grepl("Regen", data_clima$weather_description)] <- "lluvia"
+data_clima$weather_description[grepl("regen", data_clima$weather_description)] <- "lluvia"
+data_clima$weather_description[grepl("Niederschlag", data_clima$weather_description)] <- "lluvia"
+data_clima$weather_description[grepl("NIEDERSCHLAG", data_clima$weather_description)] <- "lluvia"
+data_clima$weather_description[grepl("Nebel", data_clima$weather_description)] <- "niebla"
+data_clima$weather_description[grepl("NEBEL", data_clima$weather_description)] <- "niebla"
+data_clima$weather_description[grepl("Dunst", data_clima$weather_description)] <- "neblina"
+data_clima$weather_description[grepl("Gewitter", data_clima$weather_description)] <- "tormenta"
+data_clima$weather_description[grepl("Blitzentladungen", data_clima$weather_description)] <- "relámpagos"
+data_clima$weather_description[grepl("keine signifikanten Wettererscheinungen beobachtet", data_clima$weather_description)] <- "nada significante"
+data_clima$weather_description[grepl("Änderung des Bewölkungszustandes", data_clima$weather_description)] <- "cambio en la nubosidad"
+data_clima$weather_description[grepl("Eiskörner", data_clima$weather_description)] <- "granizo"
+data_clima$weather_description[grepl("Wetter wurde nicht gemeldet", data_clima$weather_description)] <- "desconocido"
+```
+
+Agrupamos los valores en función de la dirección del viento y la categoria del viento
+
+```{r , echo=TRUE}
+# Clasificamos según la dirección del viento
+data_clima <- data_clima %>%
+  mutate(
+    wind_direction = case_when(
+      D >= 337.5 | D < 22.5 ~ "N",
+      D >= 22.5 & D < 67.5 ~ "NE",
+      D >= 67.5 & D < 112.5 ~ "E",
+      D >= 112.5 & D < 157.5 ~ "SE",
+      D >= 157.5 & D < 202.5 ~ "S",
+      D >= 202.5 & D < 247.5 ~ "SW",
+      D >= 247.5 & D < 292.5 ~ "W",
+      D >= 292.5 & D < 337.5 ~ "NW",
+      TRUE ~ NA_character_
+    ),
+    wind_direction = factor(
+      wind_direction,
+      levels = c("N", "NE", "E", "SE", "S", "SW", "W", "NW"),
+      ordered = TRUE
+    )
+  ) %>%
+  select(-D)
+
+# Clasificamos según la categoria del viento
+data_clima <- data_clima %>%
+  mutate(
+    wind_category = case_when(
+      F <= 0.2 ~ "Calma",
+      F <= 1.5 ~ "Muy débil",
+      F <= 3.3 ~ "Débil",
+      F <= 5.4 ~ "Moderado",
+      F <= 7.9 ~ "Fresco",
+      F <= 10.7 ~ "Fuerte",
+      F > 10.7 ~ "Muy fuerte",
+      TRUE ~ NA_character_
+    ),
+    wind_category = factor(
+      wind_category,
+      levels = c("Calma", "Muy débil", "Débil", "Moderado", "Fresco", "Fuerte", "Muy fuerte"),
+      ordered = TRUE
+    )
+  ) %>%
+  select(-F)
+```
+
+Finalmente guardamos los datos climáticos en un csv antes de unirlos con los datos de los accidentes:
+
+```{r , echo=TRUE}
+write.csv(data_clima, "data_clima.csv", row.names = TRUE)
+
+```
+
+Realizamos la unión de los datos climáticos con los datos de los accidentes y la infraestructura para así tener los datos climatológicos de cada accidente.
+
+```{r , echo=TRUE}
+accidents_infrastructure_clima <- left_join(accidents_infrastructure, data_clima, by = c("year", "month", "day", "hour"))
+
+write.csv(accidents_infrastructure_clima, "accidents_infrastructure_clima.csv", row.names = TRUE)
+```
+
+## 4. Datos del tráfico
+
+Los datos del tráfico ciclista han sido obtenidos para una única estación y han sido descargados en formato csv. A continuación se leen estos datos:
+```{r , echo=TRUE}
+ruta_base <- "../Datos/Radverkehrsmengen/"
+
+archivo <- paste0(ruta_base, "export_radverkehr.csv")
+
+data_traffic <- fread(archivo, skip = 1)
+```
+
+Vemos la estructura interna y un resumen estadístico de los datos del tráfico, ejecutando str() y summary().
+
+```{r , echo=TRUE}
+str(data_traffic)
+```
+
+```{r , echo=TRUE}
+summary(data_traffic)
+```
+
+En primer lugar transformaremos la columan "Datum" en un valor Date y extraeremos el año, mes y dia.
+
+```{r , echo=TRUE}
+data_traffic$Datum <- as.Date(data_traffic$Datum, format = "%d.%m.%Y")
+
+data_traffic$year <- as.integer(format(data_traffic$Datum, "%Y"))
+data_traffic$month <- as.integer(format(data_traffic$Datum, "%m"))
+data_traffic$day <- as.integer(format(data_traffic$Datum, "%d"))
+```
+
+Renombramos la columna "Anzahl Fahrräder" en traffic y filtramos los datos a partir de 2016.
+
+```{r , echo=TRUE}
+data_traffic <- data_traffic %>% rename(traffic = `Anzahl Fahrräder`)
+
+data_traffic <- data_traffic %>%
+  filter(year >= 2016)
+```
+
+Obtenomos la hora de la medición y eliminamos las columnas que no son de interés
+
+```{r , echo=TRUE}
+data_traffic$hour <- as.integer(substr(data_traffic$`Zeitraum (von)`, 1, 2))
+
+data_traffic <- data_traffic %>% select(-Datum, -`Zeitraum (von)`)
+```
+
+Finalmente, guardamos los datos en un archivo csv antes de unirlos con los datos de los accidentes.
+
+```{r , echo=TRUE}
+write.csv(data_traffic, "data_traffic.csv", row.names = TRUE)
+```
+
+Realizamos la unión con los datos de los accidentes y damos por finalizado el preprocesamiento guardando los datos finales en un archivo csv.
+
+```{r , echo=TRUE}
+data_complete <- left_join(accidents_infrastructure_clima, data_traffic, by = c("year", "month", "day", "hour"))
+```
+
+```{r , echo=TRUE}
+write.csv(data_complete, "data_complete.csv", row.names = TRUE)
+```
