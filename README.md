@@ -20,11 +20,11 @@ El Github está estructurado de la siguiente forma:
      *  **Codigo/03-modelos.htmlt** Aplicación de modelos de aprendizaje automático para la predicción de los accidentes ciclistas.  
 
 *  **Datos** directorio que contiene los ficheros originales descargados de las diferentes fuentes de openData:
-     *  **Datos/Bevoelkerung** directori que conté els conjunts ZIP per l'estudi de la infraestructura ciclable
-     *  **Datos/Radinfraestruktur** directori que conté els conjunts CSV per l'estudi d'ús de la bicicleta
-     *  **Datos/Radverkehrsmengen** directori que conté els conjunts CSV per l'estudi d'accidentalitat
-     *  **Datos/Unfallatlas** directori que conté el conjunt CSV per l'estudi de la qualitat de l'aire
-     *  **Datos/Wetter** directori que conté els ZIP amb les dades administratives de Barcelona (municipi, districtes i barris)
-    
+     *  **Datos/Bevoelkerung** directorio que contiene el archivo csv de donde se extrae la geometria y la población de los diferentes distritos en Hamburgo
+     *  **Datos/Radinfraestruktur** directorio que contiene el archivo csv de donde se extrae la información sobre la red ciclista en Hamburgo
+     *  **Datos/Radverkehrsmengen** directorio que contiene el archivo csv de donde se extrae la información sobre el tráfico en Hamburgo
+     *  **Datos/Unfallatlas** directorio con archivos zip que contienen la información sobre los accidentes en Alemania entre 2016 y 2023
+     *  **Datos/Wetter** directorio que contiene las mediciones climatológicas en la ciudad de Hamburgo
+     *  
 *  **Visualizacion** directorio que contiene los ficheros utilizados para crear la visualizacion con Shiny
 
