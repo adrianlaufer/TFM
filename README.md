@@ -5,7 +5,7 @@ Análisis y predicción de los accidentes ciclistas en la ciudad de Hamburgo
 #  Descripción
 Este proyecto de ciencia de datos corresponde al trabajo final de master del master de ciencia de datos de la UOC y tiene como título: **Análisis y predicción de los accidentes ciclistas en la ciudad de Hamburgo**. En este trabajo se analizan los accidentes de tráfico en bicicleta en la ciudad de Hamburgo de forma estadística y geoespacial. Por otra parte se trata de identificar las principales causas de los accidentes y realizar una predicción de ellos a partir de modelos de aprendizaje automático.
 
-La captura, el preprocesamiento, el análisis y las predicciones con los modelos de aprendizaje automático se han realizado en ***[R](https://patriciaandolz.github.io/tfm/)***, mentre que l'anàlisi geoespacial s'ha dut a terme a ***ArcGIS Pro***. Finalment, s'ha publicat un [visor interactiu](https://patriciaandolz.maps.arcgis.com/apps/MapSeries/index.html?appid=d3808fb4190b40939b9d3bfea61f7f7b) amb les quatre temàtiques d'estudi i un espai per explorar les capes superposades a ***ArcGIS Online*** (AGOL), construit amb ***Web AppBuilder*** i ***Story Map Series***.
+La captura, el preprocesamiento, el análisis y las predicciones con los modelos de aprendizaje automático se han realizado en ***[R](https://github.com/adrianlaufer/TFM)***. La visualización de los análisis geoespaciales realizados se ha realizado con Shiny también en R y se han publicado en un visor interactivo en (https://adrianlaufer.shinyapps.io/visualizacion-bicicletas/)).
 
 # Autores
 * Autor del TFM: **Adrian Läufer Nicolás**
