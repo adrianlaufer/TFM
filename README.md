@@ -25,6 +25,6 @@ El Github está estructurado de la siguiente forma:
      *  **Datos/Radverkehrsmengen** directorio que contiene el archivo csv de donde se extrae la información sobre el tráfico en Hamburgo
      *  **Datos/Unfallatlas** directorio con archivos zip que contienen la información sobre los accidentes en Alemania entre 2016 y 2023
      *  **Datos/Wetter** directorio que contiene las mediciones climatológicas en la ciudad de Hamburgo
-     *  
+
 *  **Visualizacion** directorio que contiene los ficheros utilizados para crear la visualizacion con Shiny
 
