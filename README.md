@@ -1,12 +1,11 @@
 # Trabajo final del master de ciencia de datos
-Análisis de Análisis y predicción de los accidentes ciclistas en la ciudad de Hamburgo
+Análisis y predicción de los accidentes ciclistas en la ciudad de Hamburgo
 
 
 #  Descripción
-Este proyecto de ciencia de datos corresponde al proyecto final de master del ciencia de datos y tiene como título: **Análisis y predicción de los accidentes ciclistas en la ciudad de Hamburgo**. En este trabajo se analiza de forma estadística y geoespacial los datos referentes a los accidentes en bicicleta en la ciudad de Hamburgo, intentando estableciendo relación con sus principales causas: 
-Superposant tota aquesta informació es permet entendre les actuacions de l’Ajuntament per impulsar aquesta iniciativa sostenible.
+Este proyecto de ciencia de datos corresponde al trabajo final de master del master de ciencia de datos de la UOC y tiene como título: **Análisis y predicción de los accidentes ciclistas en la ciudad de Hamburgo**. En este trabajo se analizan los accidentes de tráfico en bicicleta en la ciudad de Hamburgo de forma estadística y geoespacial. Por otra parte se trata de identificar las principales causas de los accidentes y realizar una predicción de ellos a partir de modelos de aprendizaje automático.
 
-En concret, la captura, el tractament i l'anàlisi estadística de les dades s'ha realitzat en ***[R](https://patriciaandolz.github.io/tfm/)***, mentre que l'anàlisi geoespacial s'ha dut a terme a ***ArcGIS Pro***. Finalment, s'ha publicat un [visor interactiu](https://patriciaandolz.maps.arcgis.com/apps/MapSeries/index.html?appid=d3808fb4190b40939b9d3bfea61f7f7b) amb les quatre temàtiques d'estudi i un espai per explorar les capes superposades a ***ArcGIS Online*** (AGOL), construit amb ***Web AppBuilder*** i ***Story Map Series***.
+La captura, el preprocesamiento, el análisis y las predicciones con los modelos de aprendizaje automático se han realizado en ***[R](https://patriciaandolz.github.io/tfm/)***, mentre que l'anàlisi geoespacial s'ha dut a terme a ***ArcGIS Pro***. Finalment, s'ha publicat un [visor interactiu](https://patriciaandolz.maps.arcgis.com/apps/MapSeries/index.html?appid=d3808fb4190b40939b9d3bfea61f7f7b) amb les quatre temàtiques d'estudi i un espai per explorar les capes superposades a ***ArcGIS Online*** (AGOL), construit amb ***Web AppBuilder*** i ***Story Map Series***.
 
 # Autores
 * Autor del TFM: **Adrian Läufer Nicolás**
