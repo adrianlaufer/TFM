@@ -1,1 +1,0 @@
-https://geodienste.hamburg.de/HH_WFS_Radverkehrsnetz?service=WFS&version=2.0.0&request=GetFeature&typeNames=de.hh.up:radwegenetz_gesamt&outputFormat=text/csv

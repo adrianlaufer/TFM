@@ -1077,52 +1077,24 @@ data_clima &lt;- data_clima %&gt;% rename(sunshine_minutes = SD_SO)
 data_clima &lt;- data_clima %&gt;% rename(visibility = V_VV)</code></pre>
 <p>Traducimos y simplificamos los valores en la variable
 “weather_description”:</p>
-<pre class="r"><code># Cambiamos los valores en la descripcion del tiempo
-data_clima$weather_description[grepl(&quot;Schneeregen&quot;, data_clima$weather_description)] &lt;- &quot;agua nieve&quot;</code></pre>
-<pre><code>Warning in `[&lt;-.factor`(`*tmp*`, grepl(&quot;Schneeregen&quot;,
-data_clima$weather_description), : ungültiges Faktorniveau, NA erzeugt</code></pre>
-<pre class="r"><code>data_clima$weather_description[grepl(&quot;Schnee&quot;, data_clima$weather_description)] &lt;- &quot;nieve&quot;</code></pre>
-<pre><code>Warning in `[&lt;-.factor`(`*tmp*`, grepl(&quot;Schnee&quot;,
-data_clima$weather_description), : ungültiges Faktorniveau, NA erzeugt</code></pre>
-<pre class="r"><code>data_clima$weather_description[grepl(&quot;Regen&quot;, data_clima$weather_description)] &lt;- &quot;lluvia&quot;</code></pre>
-<pre><code>Warning in `[&lt;-.factor`(`*tmp*`, grepl(&quot;Regen&quot;,
-data_clima$weather_description), : ungültiges Faktorniveau, NA erzeugt</code></pre>
-<pre class="r"><code>data_clima$weather_description[grepl(&quot;regen&quot;, data_clima$weather_description)] &lt;- &quot;lluvia&quot;</code></pre>
-<pre><code>Warning in `[&lt;-.factor`(`*tmp*`, grepl(&quot;regen&quot;,
-data_clima$weather_description), : ungültiges Faktorniveau, NA erzeugt</code></pre>
-<pre class="r"><code>data_clima$weather_description[grepl(&quot;Niederschlag&quot;, data_clima$weather_description)] &lt;- &quot;lluvia&quot;</code></pre>
-<pre><code>Warning in `[&lt;-.factor`(`*tmp*`, grepl(&quot;Niederschlag&quot;,
-data_clima$weather_description), : ungültiges Faktorniveau, NA erzeugt</code></pre>
-<pre class="r"><code>data_clima$weather_description[grepl(&quot;NIEDERSCHLAG&quot;, data_clima$weather_description)] &lt;- &quot;lluvia&quot;</code></pre>
-<pre><code>Warning in `[&lt;-.factor`(`*tmp*`, grepl(&quot;NIEDERSCHLAG&quot;,
-data_clima$weather_description), : ungültiges Faktorniveau, NA erzeugt</code></pre>
-<pre class="r"><code>data_clima$weather_description[grepl(&quot;Nebel&quot;, data_clima$weather_description)] &lt;- &quot;niebla&quot;</code></pre>
-<pre><code>Warning in `[&lt;-.factor`(`*tmp*`, grepl(&quot;Nebel&quot;,
-data_clima$weather_description), : ungültiges Faktorniveau, NA erzeugt</code></pre>
-<pre class="r"><code>data_clima$weather_description[grepl(&quot;NEBEL&quot;, data_clima$weather_description)] &lt;- &quot;niebla&quot;</code></pre>
-<pre><code>Warning in `[&lt;-.factor`(`*tmp*`, grepl(&quot;NEBEL&quot;,
-data_clima$weather_description), : ungültiges Faktorniveau, NA erzeugt</code></pre>
-<pre class="r"><code>data_clima$weather_description[grepl(&quot;Dunst&quot;, data_clima$weather_description)] &lt;- &quot;neblina&quot;</code></pre>
-<pre><code>Warning in `[&lt;-.factor`(`*tmp*`, grepl(&quot;Dunst&quot;,
-data_clima$weather_description), : ungültiges Faktorniveau, NA erzeugt</code></pre>
-<pre class="r"><code>data_clima$weather_description[grepl(&quot;Gewitter&quot;, data_clima$weather_description)] &lt;- &quot;tormenta&quot;</code></pre>
-<pre><code>Warning in `[&lt;-.factor`(`*tmp*`, grepl(&quot;Gewitter&quot;,
-data_clima$weather_description), : ungültiges Faktorniveau, NA erzeugt</code></pre>
-<pre class="r"><code>data_clima$weather_description[grepl(&quot;Blitzentladungen&quot;, data_clima$weather_description)] &lt;- &quot;relámpagos&quot;</code></pre>
-<pre><code>Warning in `[&lt;-.factor`(`*tmp*`, grepl(&quot;Blitzentladungen&quot;,
-data_clima$weather_description), : ungültiges Faktorniveau, NA erzeugt</code></pre>
-<pre class="r"><code>data_clima$weather_description[grepl(&quot;keine signifikanten Wettererscheinungen beobachtet&quot;, data_clima$weather_description)] &lt;- &quot;nada significante&quot;</code></pre>
-<pre><code>Warning in `[&lt;-.factor`(`*tmp*`, grepl(&quot;keine signifikanten Wettererscheinungen
-beobachtet&quot;, : ungültiges Faktorniveau, NA erzeugt</code></pre>
-<pre class="r"><code>data_clima$weather_description[grepl(&quot;Änderung des Bewölkungszustandes&quot;, data_clima$weather_description)] &lt;- &quot;cambio en la nubosidad&quot;</code></pre>
-<pre><code>Warning in `[&lt;-.factor`(`*tmp*`, grepl(&quot;Änderung des Bewölkungszustandes&quot;, :
-ungültiges Faktorniveau, NA erzeugt</code></pre>
-<pre class="r"><code>data_clima$weather_description[grepl(&quot;Eiskörner&quot;, data_clima$weather_description)] &lt;- &quot;granizo&quot;</code></pre>
-<pre><code>Warning in `[&lt;-.factor`(`*tmp*`, grepl(&quot;Eiskörner&quot;,
-data_clima$weather_description), : ungültiges Faktorniveau, NA erzeugt</code></pre>
-<pre class="r"><code>data_clima$weather_description[grepl(&quot;Wetter wurde nicht gemeldet&quot;, data_clima$weather_description)] &lt;- &quot;desconocido&quot;</code></pre>
-<pre><code>Warning in `[&lt;-.factor`(`*tmp*`, grepl(&quot;Wetter wurde nicht gemeldet&quot;,
-data_clima$weather_description), : ungültiges Faktorniveau, NA erzeugt</code></pre>
+<pre class="r"><code># Convertimos a character:
+data_clima$weather_description &lt;- as.character(data_clima$weather_description)
+# Cambiamos los valores en la descripcion del tiempo
+data_clima$weather_description[grepl(&quot;Schneeregen&quot;, data_clima$weather_description)] &lt;- &quot;agua nieve&quot;
+data_clima$weather_description[grepl(&quot;Schnee&quot;, data_clima$weather_description)] &lt;- &quot;nieve&quot;
+data_clima$weather_description[grepl(&quot;Regen&quot;, data_clima$weather_description)] &lt;- &quot;lluvia&quot;
+data_clima$weather_description[grepl(&quot;regen&quot;, data_clima$weather_description)] &lt;- &quot;lluvia&quot;
+data_clima$weather_description[grepl(&quot;Niederschlag&quot;, data_clima$weather_description)] &lt;- &quot;lluvia&quot;
+data_clima$weather_description[grepl(&quot;NIEDERSCHLAG&quot;, data_clima$weather_description)] &lt;- &quot;lluvia&quot;
+data_clima$weather_description[grepl(&quot;Nebel&quot;, data_clima$weather_description)] &lt;- &quot;niebla&quot;
+data_clima$weather_description[grepl(&quot;NEBEL&quot;, data_clima$weather_description)] &lt;- &quot;niebla&quot;
+data_clima$weather_description[grepl(&quot;Dunst&quot;, data_clima$weather_description)] &lt;- &quot;neblina&quot;
+data_clima$weather_description[grepl(&quot;Gewitter&quot;, data_clima$weather_description)] &lt;- &quot;tormenta&quot;
+data_clima$weather_description[grepl(&quot;Blitzentladungen&quot;, data_clima$weather_description)] &lt;- &quot;relámpagos&quot;
+data_clima$weather_description[grepl(&quot;keine signifikanten Wettererscheinungen beobachtet&quot;, data_clima$weather_description)] &lt;- &quot;nada significante&quot;
+data_clima$weather_description[grepl(&quot;Änderung des Bewölkungszustandes&quot;, data_clima$weather_description)] &lt;- &quot;cambio en la nubosidad&quot;
+data_clima$weather_description[grepl(&quot;Eiskörner&quot;, data_clima$weather_description)] &lt;- &quot;granizo&quot;
+data_clima$weather_description[grepl(&quot;Wetter wurde nicht gemeldet&quot;, data_clima$weather_description)] &lt;- &quot;desconocido&quot;</code></pre>
 <p>Agrupamos los valores en función de la dirección del viento y la
 categoria del viento</p>
 <pre class="r"><code># Clasificamos según la dirección del viento

@@ -1,0 +1,347 @@
+---
+title: 'Análisis y predicción de los accidentes ciclistas en la ciudad de
+  Hamburgo - Análisis'
+author: "Adrian Läufer"
+date: "2025-05-02"
+output:
+  html_document: 
+  toc: true
+  theme: cerulean
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval=T, echo=T,comment = NULL)
+```
+
+```{css, echo=FALSE}
+h1{
+  font-size: 30px;
+  color:  #000080;
+}
+h2{
+  font-size: 25px;
+  color:#4169E1;
+}
+
+.author{
+  font-size: 25px;
+  color:#C71585;
+}
+
+.date{
+  color:#778899;
+}
+```
+
+# 2. Análisis
+
+Una vez realizado el preprocesado de los datos, realizamos un análisis de los datos obtenidos. Para ello, en primer lugar cargaremos las librerias que vamos a utilizar y los datos obtenidos del preprocesado.
+
+```{r , echo=TRUE, warning=FALSE, message=FALSE}
+library(readr)      
+library(data.table) 
+library(utils)     
+library(sf)
+library(dplyr)
+library(purrr)
+library(lubridate)
+library(ggplot2)
+library(corrplot)
+library(factoextra)
+library(leaflet)
+```
+
+```{r , echo=TRUE, warning=FALSE, message=FALSE}
+df <- read_csv("data_complete.csv", locale = locale(encoding = "UTF-8"))
+```
+
+## 1. Preparación de los datos
+
+Para un análisis de la distribución de las variables, en primer lugar prescindiremos de las variables geométricas dentro del dataframe:
+
+```{r , echo=TRUE}
+# Descartamos los valores geométricos
+df <- df %>% select(-geometry, -geom)
+```
+
+En primer lugar veremos como esta la estructura interna de los datos importados:
+
+```{r, echo=TRUE}
+str(df)
+```
+
+Además realizaremos un análisis estadísticos de los datos mediante summary(df)
+
+```{r, echo=TRUE}
+summary(df)
+```
+
+Para realizar una matriz de covarianzas y el análisis de PCA, las variables deben de ser numericas. Tal y como hemos visto anteriormente, existen algunas variables de tipo character, que a continuación transformaremos a tipo factor y finalmente a tipo numérico para poder implementar tanto la matriz de covarianzas como el análisis de PCA.
+
+```{r , echo=TRUE}
+# Convertimos las columnas en numericas
+df$category <- as.factor(df$category)
+df$category <- as.numeric(df$category)
+
+df$type_bikelane <- factor(df$type_bikelane)
+df$type_bikelane<- as.numeric(df$type_bikelane)
+
+df$direction <- factor(df$direction)
+df$direction <- as.numeric(df$direction)
+
+df$surface <- factor(df$surface)
+df$surface <- as.numeric(df$surface)
+
+df$weather_description <- factor(df$weather_description)
+df$weather_description <- as.numeric(df$weather_description)
+
+df$wind_direction <- factor(df$wind_direction)
+df$wind_direction <- as.numeric(df$wind_direction)
+
+df$wind_category <- factor(df$wind_category)
+df$wind_category <- as.numeric(df$wind_category)
+```
+
+Descartamos además las siguientes 3 variables que no son de interés para la creación de los histogramas a partir de los cuales se puede ver la distribución de las diferentes variables.
+
+```{r, echo=TRUE}
+df <- df %>% select(-...1, -FID, -X_fid, -street_name)
+```
+
+## 2. Análisis de la distribución de las diferentes variables
+
+Para realizar el análisis estadístico de las diferentes variables que describen a los accidentes ciclistas en Hamburgo, en primer lugar crearemos un histograma para cada una de las variables:
+
+```{r, echo=TRUE}
+for (col in names(df)) {
+  
+  if (col == "category") next
+  
+  variable <- df[[col]]
+  
+  if (is.numeric(variable)) {
+    
+    df_filtered <- df 
+    
+    # Agrupamos en bins
+    bin_data <- df_filtered %>%
+      mutate(bin = cut(!!sym(col), breaks = 31, include.lowest = TRUE)) %>%
+      group_by(bin, category) %>%
+      summarise(n = n(), .groups = "drop")
+    
+    # Ordenamos los niveles de los bins
+    bin_data$bin <- factor(bin_data$bin, levels = unique(bin_data$bin))
+    
+    # Creamos el histograma
+    p <- ggplot(bin_data, aes(x = bin, y = n, fill = as.factor(category))) +
+      geom_bar(stat = "identity") +
+      labs(title = paste("Cantidad de accidentes por", col, "y category"),
+           x = col, y = "Número de accidentes", fill = "category") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    print(p)
+  }
+}
+```
+
+En los histogramas representados se pueden observar las siguientes tendencias dentro de los accidentes ciclistas:
+
+* Existen ciertas zonas en la ciudad de Hmaburgo donde se concentran los accidentes ciclistas.
+* La cantidad de accidentes, especialmente los accidentes leves, han aumentado en los últimos años.
+* La cantidad de accidentes aumenta en los meses cálidos, probablemente debido al mayor tráfico.
+* Durante el día, los accidentes se concentran en la mañana (7-8 horas) cuando la gente va al trabajo y a la hora de salida del trabajo (16-17 horas), probablemente debido al mayor tráfico en estas horas.
+* La cantidad de accidentes disminuye el fin de semana.
+* En la mayoria de accidentes ciclistas también se ve involucrado un coche pero no peatones.
+* A medida que aumenta la humedad, aumenta la cantidad de accidentes.
+* En relación al tráfico, los accidentes aumentan a medida que el tráfico aumenta, pero una vez alcanzado un máximo, la cantidad de accidentes disminuye. 
+
+## 3. Matriz de correlaciones
+
+En esta sección calcularemos y visualizaremos la matriz de correlaciones entre las variables numéricas del dataset. Esto nos permitipermitirá identificar relaciones lineales entre variables, lo cual nos podrá ser útil para la selección posterior de variables en los modelos predictivos.
+
+Primero seleccionaremos solo las columnas numéricas del dataframe.
+
+```{r, echo=TRUE}
+numeric_df <- df[sapply(df, is.numeric)]
+```
+
+Para crar la matriz de correlaciones corresctamente, deberemos de tener un valor razonable de NAs. Por ello, vamos a controlar primero cuantos elementos NA hay para cada columna.
+
+```{r, echo=TRUE}
+colSums(is.na(numeric_df))
+```
+
+A continuación, definiremos un umbral de proproción mínima de datos correctos y filtraremos las columnas numéricas según este umbral, con tal de descartar las columnas con muchos valores NAs.
+
+```{r, echo=TRUE}
+# Definimos un umbral para la proporción mínima de datos no faltantes (80%)
+threshold <- 0.8
+
+# Filtramos las columnas numéricas que tienen al menos el 80% de valores no nulos
+valid_cols <- sapply(numeric_df, function(x) mean(!is.na(x)) > threshold)
+numeric_df_filtered <- numeric_df[, valid_cols]
+```
+
+Una vez realizado esto, podemos calcular la matriz de correlación y representarla graficamente:
+```{r, echo=TRUE}
+# Calculamos la matriz de correlación
+cor_matrix <- cor(numeric_df_filtered, use = "complete.obs")
+
+# Representamos la matriz
+corrplot(cor_matrix, method = "color", type = "upper", 
+         tl.col = "black", tl.cex = 0.8, number.cex = 0.7,
+         col = colorRampPalette(c("blue", "white", "red"))(200))
+
+```
+En la matriz de correlaciones, vemos que existe una correlación fuerte entre las diferentes variables climatológicas consideradas, al igual que existe una correlación entre las variables espaciales y los limites administrativos.
+
+En cuanto al tipo y la categoria de accidente, se puede apreciar cierta correlación con alguna variable climatológi (humedad, temperatura) al igual que con el tipo de carril ciclista.
+
+Para posteriormente utilizar el dataframe numeric_df en los modelos de aprendizaje automático, a continuación guardamos los datos en un csv.
+
+```{r, echo=TRUE}
+### Guardamos el numeric_df para posteriormente utilizarlo en los modelos
+write.csv(numeric_df, "data_complete_numeric.csv", row.names = FALSE)
+```
+
+## 4. Análisis de PCA
+
+En esta sección se realiza un Análisis de Componentes Principales (PCA) para reducir la dimensionalidad del conjunto de datos numéricos y facilitar la interpretación visual de las relaciones entre variables. El PCA permite identificar las combinaciones lineales de variables que explican mayor varianza en los datos, lo que puede ser útil tanto para exploración como para selección de variables relevantes.
+
+Antes de aplicar el PCA, se realiza una limpieza del conjunto de datos. Para ello, eliminamos las columnas que contienen valores no finitos (Inf) o valores faltantes (NA), ya que estos afectarían negativamente el análisis.
+
+```{r, echo=TRUE}
+# Eliminamos las columnas que contienen NA o Inf
+numeric_df_clean <- numeric_df_filtered %>%
+  select(where(~ all(is.finite(.)) & !any(is.na(.))))
+```
+
+Por otra parte escalamos las variables numéricas para que todas tengan media cero y desviación estándar uno. Esto es fundamental en PCA, ya que de lo contrario, las variables con mayores magnitudes dominarían el análisis, sin necesariamente ser más importantes.
+
+```{r, echo=TRUE}
+# Escalamos las variables
+numeric_df_scaled <- scale(numeric_df_clean)
+```
+
+Una vez realizado estos pasos, aplicamos la función prcomp para calcular el PCA. Además extraemos las cargas (loadings), que indican el peso de cada variable en cada componente principal.
+
+```{r, echo=TRUE}
+# Realizamos el PCA
+pca_result <- prcomp(numeric_df_scaled, center = TRUE, scale. = TRUE)
+
+# Cargas absolutas
+loadings <- abs(pca_result$rotation[, 1:3])
+```
+
+A continuación extraemos las cargas absolutas de las tres primeras componentes principales y identificamos las cinco variables más influyentes en cada una de ellas. Estas son las variables que más peso tienen en la definición de cada componente, y por tanto son claves para entender qué representa cada uno.
+
+El resultado top_vars muestra estas cargas, ordenadas por importancia:
+
+```{r, echo=TRUE}
+# Seleccionamos las 5 variables más influyentes por componente
+top_vars <- apply(loadings, 2, function(x) sort(x, decreasing = TRUE)[1:5])
+
+# Mostramos resultados
+top_vars
+```
+
+```{r, echo=TRUE}
+fviz_pca_biplot(pca_result,
+                label = "var",       
+                habillage = numeric_df_clean$category,
+                addEllipses = TRUE,   
+                palette = "Dark2",    
+                repel = TRUE,         
+                col.var = "black",
+                title = "Biplot del PCA coloreado por tipo de accidente")
+
+```
+Este gráfico nos muestra tanto:
+
+* Las observaciones proyectadas sobre los dos primeros componentes principales.
+* Las variables originales representadas como vectores, indicando su dirección y fuerza en el espacio de componentes.
+
+Los puntos han sido coloreados según la variable categórica (category), que en este caso representa el tipo de accidente. Esto permite explorar visualmente que los diferentes tipos de accidente se agrupan de forma natural en el espacio reducido de los primeros componentes de forma similar, puesto que las elipses de cada grupo tienen formas relativamente parecidas y los grupos están poco separados entre sí a excepción quizá del grupo 1.
+
+## 4. Análisis geoespacial
+
+Además, para finalizar el análisis de los datos incluiremos un análisis geoespacial de los datos para visualizar su distribución en el espacio.
+```{r , echo=TRUE, warning=FALSE, message=FALSE}
+df <- read_csv("data_complete.csv", locale = locale(encoding = "UTF-8"))
+df_sf <- st_as_sf(df, coords = c("LINREFX", "LINREFY"), crs = 25832) %>% 
+  st_transform(4326)
+```
+
+La primera variable que hemos considerado para ello ha sido la categoria del accidente:
+```{r , echo=TRUE}
+category_colors <- colorFactor(c("blue", "red", "green"), domain = levels(factor(df_sf$category)))
+
+leaflet(df_sf) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    ~st_coordinates(df_sf)[, 1], ~st_coordinates(df_sf)[, 2], 
+    color = ~category_colors(category),  
+    popup = ~category,
+    radius = 3, 
+    fillOpacity = 0.7
+  ) %>%
+  addLegend(
+    "bottomright", 
+    pal = category_colors,  
+    values = ~category,     
+    title = "Tipo de accidente"
+  )
+```
+
+A continuación también representamos la distribución de los accidentes según el tipo de accidente.
+
+```{r , echo=TRUE}
+type_accident_colors <- colorFactor(
+  palette = c("blue", "red", "green", "yellow", "purple", "orange", "pink"),
+  domain = levels(factor(df_sf$type_accident))
+)
+
+leaflet(df_sf) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    ~st_coordinates(df_sf)[, 1], ~st_coordinates(df_sf)[, 2], 
+    color = ~type_accident_colors(type_accident),  
+    popup = ~type_accident,
+    radius = 3, 
+    fillOpacity = 0.7
+  ) %>%
+  addLegend(
+    "bottomright", 
+    pal = type_accident_colors,  
+    values = ~type_accident,    
+    title = "Tipo de accidente"
+  )
+```
+
+Finalmente según el tipo de carril bici donde ha ocurrido el accidente.
+
+```{r , echo=TRUE}
+type_bikelane_colors <- colorFactor(
+  palette = c("blue", "red", "green", "yellow", "purple", "orange", "pink", "brown"),
+  domain = levels(factor(df_sf$type_bikelane))
+)
+
+leaflet(df_sf) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    ~st_coordinates(df_sf)[, 1], ~st_coordinates(df_sf)[, 2], 
+    color = ~type_bikelane_colors(type_bikelane),  
+    popup = ~type_bikelane,
+    radius = 3, 
+    fillOpacity = 0.7
+  ) %>%
+  addLegend(
+    "bottomright", 
+    pal = type_bikelane_colors,  
+    values = ~type_bikelane,     
+    title = "Tipo de carril bici"
+  )
+```
+
+Como se puede apreciar de las 3 gráficas, no se puede identificar ninguna distribución espacial de los accidentes en el espacio.

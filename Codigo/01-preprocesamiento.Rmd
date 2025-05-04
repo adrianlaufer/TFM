@@ -499,6 +499,8 @@ data_clima <- data_clima %>% rename(visibility = V_VV)
 
 Traducimos y simplificamos los valores en la variable "weather_description":
 ```{r , echo=TRUE}
+# Convertimos a character:
+data_clima$weather_description <- as.character(data_clima$weather_description)
 # Cambiamos los valores en la descripcion del tiempo
 data_clima$weather_description[grepl("Schneeregen", data_clima$weather_description)] <- "agua nieve"
 data_clima$weather_description[grepl("Schnee", data_clima$weather_description)] <- "nieve"
