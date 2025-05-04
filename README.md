@@ -14,22 +14,17 @@ La captura, el preprocesamiento, el análisis y las predicciones con los modelos
 
 # Estructura del Git
 El Github está estructurado de la siguiente forma:
-*  **Codigo** Contiene
+*  **Codigo** Contiene los archivos tanto en formato Rmd como html donde se expone los pasos seguidos durante la implementación del proyecto. Contiene las siguientes partes:
+     *  **Codigo/01-preprocesamiento.html** Exposición del código para el preprocesamiento de los datos
+     *  **Codigo/02-analisis.html** Análisis estadísticos de los datos de los accidentes ciclistas en Hamburgo
+     *  **Codigo/03-modelos.htmlt** Aplicación de modelos de aprendizaje automático para la predicción de los accidentes ciclistas.  
 
-*  **codi/Dades** directori que conté els fitxers originals descarregats d'OpenData Barcelona i Catalunya. En concret:
-     *  **codi/Dades/T1.infraestructura_ciclable** directori que conté els conjunts ZIP per l'estudi de la infraestructura ciclable
-     *  **codi/Dades/T2.aforaments** directori que conté els conjunts CSV per l'estudi d'ús de la bicicleta
-     *  **codi/Dades/T3.accidentalitat** directori que conté els conjunts CSV per l'estudi d'accidentalitat
-     *  **codi/Dades/T4.qualitat_aire** directori que conté el conjunt CSV per l'estudi de la qualitat de l'aire
-     *  **codi/Dades/BCN_UNITATS_ADM** directori que conté els ZIP amb les dades administratives de Barcelona (municipi, districtes i barris)
-     *  **codi/Dades/graf_viari** directori que conté els ZIP amb l'entramat de la xarxa vial     
+*  **Datos** directorio que contiene los ficheros originales descargados de las diferentes fuentes de openData:
+     *  **Datos/Bevoelkerung** directori que conté els conjunts ZIP per l'estudi de la infraestructura ciclable
+     *  **Datos/Radinfraestruktur** directori que conté els conjunts CSV per l'estudi d'ús de la bicicleta
+     *  **Datos/Radverkehrsmengen** directori que conté els conjunts CSV per l'estudi d'accidentalitat
+     *  **Datos/Unfallatlas** directori que conté el conjunt CSV per l'estudi de la qualitat de l'aire
+     *  **Datos/Wetter** directori que conté els ZIP amb les dades administratives de Barcelona (municipi, districtes i barris)
+    
+*  **Visualizacion** directorio que contiene los ficheros utilizados para crear la visualizacion con Shiny
 
-
-*  **codi/Exports** directori que conté les capes exportades d'ArcGIS Pro. En concret:
-     *  **codi/Exports/T1.infraestructura_ciclable** directori que conté els _shapefiles_ de les capes de la infraestructura ciclable
-     *  **codi/Exports/T2.aforaments** directori que conté els _shapefiles_ de les capes d'ús de la bicicleta
-     *  **codi/Exports/T3.accidentalitat** directori que conté els _shapefiles_ de les capes d'accidentalitat
-     *  **codi/Exports/T4.qualitat_aire** directori que conté els _shapefiles_ de les capes de la qualitat de l'aire
-
-
-*  **codi/AGOL** directori que conté els recursos generats a R per enriquir el visor d'AGOL.
