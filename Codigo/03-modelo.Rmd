@@ -1,0 +1,216 @@
+---
+title: 'Análisis y predicción de los accidentes ciclistas en la ciudad de
+  Hamburgo - Modelos predictivos'
+author: "Adrian Läufer"
+date: "2025-05-02"
+output:
+  html_document: 
+  toc: true
+  theme: cerulean
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval=T, echo=T,comment = NULL)
+```
+
+```{css, echo=FALSE}
+h1{
+  font-size: 30px;
+  color:  #000080;
+}
+h2{
+  font-size: 25px;
+  color:#4169E1;
+}
+
+.author{
+  font-size: 25px;
+  color:#C71585;
+}
+
+.date{
+  color:#778899;
+}
+```
+
+# 3. Modelos predictivos
+
+Con tal de predicir la gravedad de los accidentes ciclistas según las diferentes variables definidas, aplicaremos a continuación dos modelos diferentes de aprendizaje automático: Random Forest y XGBoost.
+
+A continuación cargaremos las librerias que necesitamos para aplicar los modelos predictivos.
+
+```{r , echo=TRUE, warning=FALSE, message=FALSE}
+library(readr)  
+library(randomForest)
+library(dplyr)
+library(caret)
+library(smotefamily)
+library(xgboost)
+library(Matrix)
+```
+
+Cargamos el dataset que contiene únicamente variables numéricas, ya que muchos algoritmos de aprendizaje automático requieren que las variables predictoras estén en este formato.
+
+```{r , echo=TRUE}
+df <- read_csv("data_complete_numeric.csv", locale = locale(encoding = "UTF-8"))
+```
+
+## 1. Random Forest
+
+Antes de entrenar el modelo, aseguramos que la variable objetivo (category) esté en formato factor, ya que randomForest necesita esta estructura para realizar una clasificación.
+
+```{r , echo=TRUE}
+df$category <- as.factor(df$category)
+```
+
+Comprobamos si existen valores perdidos (NA) en alguna de las columnas, lo cual podría interferir con el entrenamiento del modelo.
+
+```{r , echo=TRUE}
+colSums(is.na(df))
+```
+Eliminamos las columnas que presentan mayor cantidad de valores perdidos y que, por tanto, podrían perjudicar o incluso evitar la creación del modelo. Además posteriormente eliminamos las filas que siguen conteniendo valores nulos, para tener un conjunto de datos limpio.
+
+```{r , echo=TRUE}
+# Quitamos las columnas con mayor cantidad de valores nulos
+df_model <- df %>% dplyr::select(-accident_other, -road_surface_condition, -accident_goodsroad, -sunshine_minutes)
+
+# Quitamos las filas con valores nulos
+df_model <- na.omit(df_model)
+```
+Dividimos el conjunto de datos en entrenamiento (70%) y prueba (30%). 
+
+```{r, echo=TRUE}
+# Determinamos los conjuntos de entrenamiento y de test
+set.seed(123)  # para reproducibilidad
+train_indices <- sample(1:nrow(df_model), 0.7 * nrow(df_model))
+train <- df_model[train_indices, ]
+test  <- df_model[-train_indices, ]
+
+# Realizamos el modelo random forest
+modelo_rf <- randomForest(category ~ ., data = train, ntree = 50, importance = TRUE)
+```
+
+Realizamos las predicciones sobre el conjunto de prueba utilizando el modelo entrenado.
+
+```{r, echo=TRUE}
+pred <- predict(modelo_rf, newdata = test)
+```
+
+Finalmente construimos una matriz de confusión para comparar las predicciones del modelo con las categorías reales. Así podemos evaluar el rendimiento del modelo.
+
+```{r, echo=TRUE}
+# Matriz de confusión
+confusion <- confusionMatrix(pred, test$category)
+print(confusion)
+```
+A pesar de obtener una predicción relativamente alta, 90,34%, los resultados nos indican que el modelo creado es igual de eficaz que si simplemente predijeramos la clase más común, porque en este caso tendriamos una tasa de acierto del 90,25%.
+
+A continuación mostrareamos la importancia de cada variable y un gráfico para visualizarla.
+
+```{r, echo=TRUE}
+importance(modelo_rf)
+varImpPlot(modelo_rf)
+
+```
+
+## 2. Random Forest con datos balanceados
+
+Dado que el dataset original presenta un fuerte desbalance entre las clases, utilizamos la función upSample() del paquete caret para equilibrar las clases mediante sobremuestreo. 
+
+```{r , echo=TRUE}
+x <- train[, setdiff(names(train), "category")]
+y <- train$category
+
+# Hacemos sobremuestreo para balancear clases
+train_bal <- upSample(x = x, y = y)
+
+# La variable de clase queda renombrada como "Class" por defecto
+table(train_bal$Class)
+```
+
+Realizamos random forest con los datos balanceados
+
+```{r, echo=TRUE}
+modelo_rf_bal <- randomForest(Class ~ ., data = train_bal, ntree = 500, importance = TRUE)
+```
+
+```{r, echo=TRUE}
+pred_bal <- predict(modelo_rf_bal, newdata = test)
+confusionMatrix(pred_bal, test$category)
+```
+Como vemos en los resultados el modelo con los daos balanceados ha sido igual de eficaz que con los datos desbalanceados.
+
+## 3. XGBoost
+
+Con el modelo Random Forest hemos tenido dificulatades para predecir correctamente las clases minoritarias debido a un fuerte desbalance en los datos. Por ello probaberemos a continuación otros modelos más robustos como **XGBoost**. 
+
+A continuación prepararemos los datos para aplicar XGBoost.
+
+```{r, echo=TRUE}
+# Crear copia del dataset limpio
+df_model <- df %>%
+  dplyr::select(-accident_other, -road_surface_condition, -accident_goodsroad, -sunshine_minutes) %>%
+  na.omit()
+
+# Reindexar categorías como 0, 1, 2
+df_model$category <- as.integer(as.factor(df_model$category)) - 1
+
+# Dividimos entre entrenamiento y test
+set.seed(123)
+train_index <- sample(1:nrow(df_model), 0.7 * nrow(df_model))
+train <- df_model[train_index, ]
+test <- df_model[-train_index, ]
+
+# Separamos variables y etiquetas
+X_train <- as.matrix(train %>% dplyr::select(-category))
+y_train <- train$category
+
+X_test <- as.matrix(test %>% dplyr::select(-category))
+y_test <- test$category
+
+# Creamos DMatrix para XGBoost
+dtrain <- xgb.DMatrix(data = X_train, label = y_train)
+dtest <- xgb.DMatrix(data = X_test, label = y_test)
+```
+
+Una vez preparados los datos creamos el modelo y calculamos las predicciones.
+```{r, echo=TRUE}
+# Número de clases
+num_class <- length(unique(y_train))
+
+# Parámetros del modelo
+params <- list(
+  objective = "multi:softmax",
+  num_class = num_class,
+  eval_metric = "mlogloss",
+  eta = 0.1,
+  max_depth = 6
+)
+
+# Entrenamos al modelo
+xgb_model <- xgb.train(
+  params = params,
+  data = dtrain,
+  nrounds = 100,
+  watchlist = list(train = dtrain),
+  verbose = 0
+)
+
+# Realizamos las predicciones
+pred_xgb <- predict(xgb_model, newdata = dtest)
+```
+
+Evaluamos la precisión global y presentamos la matriz de confusión.
+
+```{r, echo=TRUE}
+# Matriz de confusión
+confusion <- confusionMatrix(as.factor(pred_xgb), as.factor(y_test))
+confusion
+```
+De los resultados obtenidos, vemos que con XGBoost obtenemos praticamente los mismos resultados que con Random Forest.
+
+Finalmente mostramos la importancia de cada variable en el modelo.
+
+```{r, echo=TRUE}
+xgb.importance(model = xgb_model) %>%
+  xgb.plot.importance(top_n = 10)

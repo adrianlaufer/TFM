@@ -49,6 +49,7 @@ library(ggplot2)
 library(corrplot)
 library(factoextra)
 library(leaflet)
+library(leaflet.extras)
 ```
 
 ```{r , echo=TRUE, warning=FALSE, message=FALSE}
@@ -344,4 +345,19 @@ leaflet(df_sf) %>%
   )
 ```
 
-Como se puede apreciar de las 3 gráficas, no se puede identificar ninguna distribución espacial de los accidentes en el espacio.
+Como se puede apreciar de las 3 gráficas, no se puede identificar ninguna distribución espacial de los accidentes en el espacio según las 3 variables seleccionadas.
+
+A continuación, y para finalizar el análisis geospacial de los accidentes ciclistas se representa un heatmap que permite identificar visualmente las zonas con mayor concentración de siniestros en la ciudad, facilitando la detección de posibles puntos críticos para la seguridad vial ciclista.
+
+```{r , echo=TRUE}
+leaflet(df_sf) %>%
+  addTiles() %>%
+  addHeatmap(
+    lng = ~st_coordinates(df_sf)[, 1],
+    lat = ~st_coordinates(df_sf)[, 2],
+    intensity = 1,       
+    blur = 20,
+    max = 0.05,
+    radius = 15
+  )
+```
