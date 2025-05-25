@@ -2,7 +2,7 @@
 title: 'Análisis y predicción de los accidentes ciclistas en la ciudad de
   Hamburgo - Análisis'
 author: "Adrian Läufer"
-date: "2025-05-02"
+date: "Mayo 2025"
 output:
   html_document: 
   toc: true
@@ -65,7 +65,7 @@ Para un análisis de la distribución de las variables, en primer lugar prescind
 df <- df %>% select(-geometry, -geom)
 ```
 
-En primer lugar veremos como esta la estructura interna de los datos importados:
+A continuación veremos como es la estructura interna de los datos importados:
 
 ```{r, echo=TRUE}
 str(df)
@@ -77,7 +77,7 @@ Además realizaremos un análisis estadísticos de los datos mediante summary(df
 summary(df)
 ```
 
-Para realizar una matriz de covarianzas y el análisis de PCA, las variables deben de ser numericas. Tal y como hemos visto anteriormente, existen algunas variables de tipo character, que a continuación transformaremos a tipo factor y finalmente a tipo numérico para poder implementar tanto la matriz de covarianzas como el análisis de PCA.
+Para realizar una matriz de covarianzas y el análisis de PCA, las variables deben de ser numéricas. Tal y como hemos visto anteriormente, existen algunas variables de tipo carácter, que a continuación transformaremos a tipo factor y finalmente a tipo numérico para poder implementar tanto la matriz de covarianzas como el análisis de PCA.
 
 ```{r , echo=TRUE}
 # Convertimos las columnas en numericas
@@ -148,7 +148,7 @@ for (col in names(df)) {
 
 En los histogramas representados se pueden observar las siguientes tendencias dentro de los accidentes ciclistas:
 
-* Existen ciertas zonas en la ciudad de Hmaburgo donde se concentran los accidentes ciclistas.
+* Existen ciertas zonas en la ciudad de Hamburgo donde se concentran los accidentes ciclistas.
 * La cantidad de accidentes, especialmente los accidentes leves, han aumentado en los últimos años.
 * La cantidad de accidentes aumenta en los meses cálidos, probablemente debido al mayor tráfico.
 * Durante el día, los accidentes se concentran en la mañana (7-8 horas) cuando la gente va al trabajo y a la hora de salida del trabajo (16-17 horas), probablemente debido al mayor tráfico en estas horas.
@@ -157,9 +157,56 @@ En los histogramas representados se pueden observar las siguientes tendencias de
 * A medida que aumenta la humedad, aumenta la cantidad de accidentes.
 * En relación al tráfico, los accidentes aumentan a medida que el tráfico aumenta, pero una vez alcanzado un máximo, la cantidad de accidentes disminuye. 
 
+Además realizamos un análisis estadístico con las variables normalizadas en función del tráfico:
+
+```{r, echo=TRUE}
+for (col in names(df)) {
+  
+  if (col == "category" || col == "traffic") next
+  
+  variable <- df[[col]]
+  
+  if (is.numeric(variable)) {
+    
+    df_filtered <- df 
+    
+    # Agrupamos en bins y sumamos tráfico
+    bin_data <- df_filtered %>%
+      mutate(bin = cut(!!sym(col), breaks = 31, include.lowest = TRUE)) %>%
+      group_by(bin, category) %>%
+      summarise(
+        n = n(),
+        total_traffic = sum(traffic, na.rm = TRUE),
+        .groups = "drop"
+      ) %>%
+      mutate(rate = n / total_traffic)  # Normalizamos
+    
+    # Ordenamos los niveles de los bins
+    bin_data$bin <- factor(bin_data$bin, levels = unique(bin_data$bin))
+    
+    # Creamos el histograma con valores normalizados
+    p <- ggplot(bin_data, aes(x = bin, y = rate, fill = as.factor(category))) +
+      geom_bar(stat = "identity") +
+      labs(title = paste("Tasa de accidentes por", col, "y category (normalizado por tráfico)"),
+           x = col, y = "Tasa de accidentes (por unidad de tráfico)", fill = "category") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    print(p)
+  }
+}
+
+```
+
+Los histogramas normalizados indican lo siguiente:
+
+* La cantidad de accidentes en función del tráfico se mantiene relativamente constante. 
+* Los accidentes en función del tráfico aumentan en los meses más cálidos.
+* Existen tipos de carriles donde los accidentes mortales no ocurren o ocurren mucho menos que en otro tipo de carriles.
+
 ## 3. Matriz de correlaciones
 
-En esta sección calcularemos y visualizaremos la matriz de correlaciones entre las variables numéricas del dataset. Esto nos permitipermitirá identificar relaciones lineales entre variables, lo cual nos podrá ser útil para la selección posterior de variables en los modelos predictivos.
+En esta sección calcularemos y visualizaremos la matriz de correlaciones entre las variables numéricas del dataset. Esto nos permitirá identificar relaciones lineales entre variables, lo cual nos podrá ser útil para la selección posterior de variables en los modelos predictivos.
 
 Primero seleccionaremos solo las columnas numéricas del dataframe.
 
@@ -167,7 +214,7 @@ Primero seleccionaremos solo las columnas numéricas del dataframe.
 numeric_df <- df[sapply(df, is.numeric)]
 ```
 
-Para crar la matriz de correlaciones corresctamente, deberemos de tener un valor razonable de NAs. Por ello, vamos a controlar primero cuantos elementos NA hay para cada columna.
+Para crar la matriz de correlaciones correctamente, deberemos de tener un valor razonable de NAs. Por ello, vamos a controlar primero cuantos elementos NA hay para cada columna.
 
 ```{r, echo=TRUE}
 colSums(is.na(numeric_df))
@@ -197,7 +244,7 @@ corrplot(cor_matrix, method = "color", type = "upper",
 ```
 En la matriz de correlaciones, vemos que existe una correlación fuerte entre las diferentes variables climatológicas consideradas, al igual que existe una correlación entre las variables espaciales y los limites administrativos.
 
-En cuanto al tipo y la categoria de accidente, se puede apreciar cierta correlación con alguna variable climatológi (humedad, temperatura) al igual que con el tipo de carril ciclista.
+En cuanto al tipo y la categoria de accidente, se puede apreciar cierta correlación con alguna variable climatológica (humedad, temperatura) al igual que con el tipo de carril ciclista.
 
 Para posteriormente utilizar el dataframe numeric_df en los modelos de aprendizaje automático, a continuación guardamos los datos en un csv.
 
@@ -245,7 +292,21 @@ top_vars <- apply(loadings, 2, function(x) sort(x, decreasing = TRUE)[1:5])
 
 # Mostramos resultados
 top_vars
+
+# Seleccionamos los nombres de las 5 variables más influyentes por componente
+top_var_names <- apply(loadings, 2, function(x) names(sort(x, decreasing = TRUE)[1:5]))
+
+# Mostramos resultados
+top_var_names
 ```
+```{r, echo=TRUE}
+# Seleccionamos los nombres de las 5 variables menos influyentes por componente
+bottom_var_names <- apply(loadings, 2, function(x) names(sort(x, decreasing = FALSE)[1:5]))
+
+# Mostramos resultados
+bottom_var_names
+```
+
 
 ```{r, echo=TRUE}
 fviz_pca_biplot(pca_result,
@@ -345,7 +406,7 @@ leaflet(df_sf) %>%
   )
 ```
 
-Como se puede apreciar de las 3 gráficas, no se puede identificar ninguna distribución espacial de los accidentes en el espacio según las 3 variables seleccionadas.
+Como se puede apreciar de las 3 gráficas, no se puede identificar ninguna concentración espacial de los accidentes en el espacio según las 3 variables seleccionadas.
 
 A continuación, y para finalizar el análisis geospacial de los accidentes ciclistas se representa un heatmap que permite identificar visualmente las zonas con mayor concentración de siniestros en la ciudad, facilitando la detección de posibles puntos críticos para la seguridad vial ciclista.
 

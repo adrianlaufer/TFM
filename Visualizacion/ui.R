@@ -24,7 +24,7 @@ ui <- fluidPage(
     
     mainPanel(
       tabsetPanel(
-        tabPanel("Mapa", leafletOutput("accident_map", height = "600px"), br(), htmlOutput("accident_counter")),
+        tabPanel("Mapa", leafletOutput("accident_map", height = "600px"), br(), htmlOutput("accident_counter"),tableOutput("tabla_resumen_accidentes"),tableOutput("tabla_normalizada_accidentes")),
         tabPanel("Evolución", plotlyOutput("trend_plot"), br(), plotlyOutput("monthly_plot"), br(), plotlyOutput("monthly_plot_normalized")),
         tabPanel("Distribución por distrito", leafletOutput("district_plot")),
         tabPanel("Distribución por carril", plotlyOutput("hist_accidents_total"), br(), plotlyOutput("hist_accidents_per_km")),

@@ -23,9 +23,19 @@ accidentes <- accidentes %>%
   )
 
 # Infraestructura
-infra <- read_csv("data_infrastructure.csv") %>% 
-  st_as_sf(wkt = "geom", crs = 25832) %>%
+infra <- read_csv("data_vereinfacht3.csv", locale = locale(encoding = "UTF-8"))
+infra <- st_as_sf(infra, wkt = "WKT", crs = 25832) %>%
   st_transform(4326)
+
+
+longitud_carril <- infra %>%
+  mutate(long_km = as.numeric(st_length(.)) / 1000) %>%
+  st_drop_geometry() %>%
+  group_by(klasse) %>%
+  summarise(total_km = sum(long_km, na.rm = TRUE), .groups = "drop")
+
+infra <- infra %>%  mutate(longitud_m = as.numeric(st_length(WKT)))
+infra <- infra %>% filter(longitud_m > 20)
 
 # Barrios
 barrios <- read_delim("app_bevoelkerung_bev_abs_31122014_EPSG_25832.csv", delim = ";") %>%

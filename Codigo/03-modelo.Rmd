@@ -2,7 +2,7 @@
 title: 'Análisis y predicción de los accidentes ciclistas en la ciudad de
   Hamburgo - Modelos predictivos'
 author: "Adrian Läufer"
-date: "2025-05-02"
+date: "Mayo 2025"
 output:
   html_document: 
   toc: true
@@ -81,7 +81,7 @@ Dividimos el conjunto de datos en entrenamiento (70%) y prueba (30%).
 
 ```{r, echo=TRUE}
 # Determinamos los conjuntos de entrenamiento y de test
-set.seed(123)  # para reproducibilidad
+set.seed(123)  
 train_indices <- sample(1:nrow(df_model), 0.7 * nrow(df_model))
 train <- df_model[train_indices, ]
 test  <- df_model[-train_indices, ]
@@ -103,7 +103,7 @@ Finalmente construimos una matriz de confusión para comparar las predicciones d
 confusion <- confusionMatrix(pred, test$category)
 print(confusion)
 ```
-A pesar de obtener una predicción relativamente alta, 90,34%, los resultados nos indican que el modelo creado es igual de eficaz que si simplemente predijeramos la clase más común, porque en este caso tendriamos una tasa de acierto del 90,25%.
+A pesar de obtener una predicción relativamente alta, 90,34%, los resultados nos indican que el modelo creado es igual de eficaz que si simplemente predijéramos la clase más común, porque en este caso tendríamos una tasa de acierto del 90,25%.
 
 A continuación mostrareamos la importancia de cada variable y un gráfico para visualizarla.
 
@@ -138,7 +138,7 @@ modelo_rf_bal <- randomForest(Class ~ ., data = train_bal, ntree = 500, importan
 pred_bal <- predict(modelo_rf_bal, newdata = test)
 confusionMatrix(pred_bal, test$category)
 ```
-Como vemos en los resultados el modelo con los daos balanceados ha sido igual de eficaz que con los datos desbalanceados.
+Como vemos en los resultados el modelo con los datos balanceados ha sido igual de poco eficaz que con los datos desbalanceados.
 
 ## 3. XGBoost
 
@@ -147,12 +147,12 @@ Con el modelo Random Forest hemos tenido dificulatades para predecir correctamen
 A continuación prepararemos los datos para aplicar XGBoost.
 
 ```{r, echo=TRUE}
-# Crear copia del dataset limpio
+# Creamos una copia del dataset limpio
 df_model <- df %>%
   dplyr::select(-accident_other, -road_surface_condition, -accident_goodsroad, -sunshine_minutes) %>%
   na.omit()
 
-# Reindexar categorías como 0, 1, 2
+# Reindexamos las categorías como 0, 1, 2
 df_model$category <- as.integer(as.factor(df_model$category)) - 1
 
 # Dividimos entre entrenamiento y test
@@ -214,3 +214,4 @@ Finalmente mostramos la importancia de cada variable en el modelo.
 ```{r, echo=TRUE}
 xgb.importance(model = xgb_model) %>%
   xgb.plot.importance(top_n = 10)
+```

@@ -1,15 +1,32 @@
-# server.R
-
 server <- function(input, output, session) {
   
-  infra_filtrada <- reactive({
-    tipos <- input$type_bikelane
+  bbox_visible <- reactive({
+    bounds <- input$accident_map_bounds
+    if (is.null(bounds)) return(NULL)
     
-    if (is.null(tipos) || length(tipos) == 0) {
-      return(NULL)
+    st_bbox(c(xmin = bounds$west, ymin = bounds$south,
+              xmax = bounds$east, ymax = bounds$north),
+            crs = st_crs(infra)) %>%
+      st_as_sfc()
+  })
+  
+  infra_should_display <- reactive({
+    zoom_actual <- input$accident_map_zoom
+    !is.null(zoom_actual) && zoom_actual >= 13
+  })
+  
+  infra_visible <- reactive({
+    tipos <- input$type_bikelane
+    bbox <- bbox_visible()
+    
+    # Devolver sf vacío si no hay tipos seleccionados o bbox es NULL
+    if (is.null(tipos) || length(tipos) == 0 || is.null(bbox)) {
+      return(infra[0, ])
     }
     
-    infra %>% filter(klasse %in% tipos)
+    infra %>%
+      filter(klasse %in% tipos) %>%
+      filter(st_intersects(., bbox, sparse = FALSE))
   })
   
   datos_filtrados <- reactive({
@@ -32,63 +49,80 @@ server <- function(input, output, session) {
     df
   })
   
-  
-  longitud_carril <- reactive({
-    infra_filtrada() %>%
-      mutate(long_km = as.numeric(st_length(.)) / 1000) %>%
-      st_drop_geometry() %>%
-      group_by(klasse) %>%
-      summarise(total_km = sum(long_km, na.rm = TRUE), .groups = "drop")
+  observe({
+    leafletProxy("accident_map") %>% removeControl("infra_message")
+    
+    if (!infra_should_display()) {
+      leafletProxy("accident_map") %>%
+        addControl(
+          html = "<div style='background: white; padding: 6px; border: 1px solid gray; border-radius: 5px; font-size: 13px;'>
+                  🔍 Aumenta el zoom para ver la infraestructura ciclista
+                </div>",
+          position = "bottomright",
+          layerId = "infra_message"
+        )
+    }
   })
   
   output$accident_map <- renderLeaflet({
-    data_map <- infra
+    #data_map <- infra
     
     leaflet() %>%
       addTiles() %>%
       setView(lng = 9.9937, lat = 53.5511, zoom = 11) %>%
-      { 
-        if (!is.null(data_map) && nrow(data_map) > 0) {
-          addPolylines(., data = data_map,
-                       color = ~case_when(
-                         klasse == "Calle para bicicletas" ~ "green",
-                         klasse == "Carril bici en calzada" ~ "blue",
-                         klasse == "Carril protegido" ~ "purple",
-                         klasse == "Calle tráfico mixto >50km/h" ~ "red",
-                         klasse == "Calle tráfico mixto ≤30km/h" ~ "yellow",
-                         klasse == "Camino en áreas verdes" ~ "orange",
-                         klasse == "Otros" ~ "gray"
-                       ),
-                       weight = 4, opacity = 0.7)
-        } else {
-          .
-        }
-      } %>%
       addLegend(position = "bottomright",
-                colors = c("green", "blue", "purple", "red", "yellow", "orange", "gray"),
+                colors = c("green", "blue", "purple", "black", "gray", "violet", "coral"),
                 labels = c("Calle para bicicletas", "Carril bici en calzada", "Carril protegido",
-                           "Calle tráfico mixto >50km/h", "Calle tráfico mixto ≤30km/h", 
+                           "Calle de tráfico mixto > 50 km/h", "Calle de tráfico mixto ≤ 30 km/h", 
                            "Camino en áreas verdes", "Otros"),
-                title = "Tipo de Infraestructura")
+                title = "Tipo de Infraestructura") %>%
+      addLegend(position = "bottomleft",
+                colors = c("red", "orange", "yellow"),
+                labels = c("1 - Accidente con víctimas mortales", "2 - Accidente con lesión grave", "3 - Accidente con heridos leves"),
+                title = "Categoría de accidente")
   })
-  
   observe({
     df <- datos_filtrados()
     leafletProxy("accident_map") %>%
       clearMarkers() %>%
       addCircleMarkers(data = df, ~lon, ~lat,
-                       radius = 4, fillOpacity = 0.6,
-                       color = ~case_when(
-                         category == 1 ~ "blue",
-                         category == 2 ~ "green",
-                         category == 3 ~ "red"
+                       radius = 4, fillOpacity = 1,
+                       stroke = TRUE,              
+                       color = "black", 
+                       weight = 1,                 
+                       fillColor = ~case_when(     
+                         category == 1 ~ "red",
+                         category == 2 ~ "orange",
+                         category == 3 ~ "yellow"
                        ),
-                       popup = ~paste("Año:", year, "<br>Clase:", category, "<br>Type Bikelane:", type_bikelane)) %>%
-      addLegend(position = "bottomleft",
-                colors = c("blue", "green", "red"),
-                labels = c("1 - Accidente con víctimas mortales", "2 - Accidente con lesión grave", "3 - Accidente con heridos leves"),
-                title = "Categoría de accidente")
+                       popup = ~paste("Año:", year, "<br>Clase:", category, "<br>Type Bikelane:", type_bikelane),
+                       options = pathOptions(zIndex = 1000)) 
   })
+  observe({
+    req(infra_should_display())  
+    
+    data_map <- infra_visible()
+    leafletProxy("accident_map") %>% clearGroup("infraestructura")
+    
+    if (!is.null(data_map) && nrow(data_map) > 0) {
+      leafletProxy("accident_map") %>%
+        addPolylines(data = data_map,
+                     group = "infraestructura",
+                     color = ~case_when(
+                       klasse == "Calle para bicicletas" ~ "green",
+                       klasse == "Carril bici en calzada" ~ "blue",
+                       klasse == "Carril protegido" ~ "purple",
+                       klasse == "Calle de tráfico mixto > 50 km/h" ~ "black",
+                       klasse == "Calle de tráfico mixto ≤ 30 km/h" ~ "gray",
+                       klasse == "Camino en áreas verdes" ~ "violet",
+                       klasse == "Otros" ~ "coral"
+                     ),
+                     weight = 2,
+                     opacity = 1,
+                     options = pathOptions(zIndex = 200))
+    }
+  })
+  
   
   output$accident_counter <- renderUI({
     df <- datos_filtrados()
@@ -100,6 +134,40 @@ server <- function(input, output, session) {
       "<p>", paste0("Categoría ", conteo_cat$category, ": ", conteo_cat$total, collapse = " | "), "</p>"
     ))
   })
+  
+  output$tabla_resumen_accidentes <- renderTable({
+    df <- datos_filtrados()
+    
+    if (nrow(df) == 0) return(NULL)
+    
+    tabla <- df %>%
+      count(category, type_bikelane) %>%
+      tidyr::pivot_wider(names_from = type_bikelane, values_from = n, values_fill = 0) %>%
+      arrange(category)
+    
+    tabla
+  }, align = "l")
+  
+  output$tabla_normalizada_accidentes <- renderTable({
+    df <- datos_filtrados()
+    long_km <- longitud_carril
+    
+    if (nrow(df) == 0 || nrow(long_km) == 0) {
+      return(data.frame(Mensaje = "No hay datos suficientes para calcular accidentes por km."))
+    }
+    
+    tabla <- df %>%
+      count(category, type_bikelane) %>%
+      left_join(long_km, by = c("type_bikelane" = "klasse")) %>%
+      mutate(acc_x_km = n / total_km) %>%
+      select(category, type_bikelane, acc_x_km) %>%
+      tidyr::pivot_wider(names_from = type_bikelane, values_from = acc_x_km, values_fill = 0) %>%
+      arrange(category)
+    
+    tabla[-1] <- lapply(tabla[-1], function(x) format(round(x, 3), decimal.mark = ",", nsmall = 3))
+    
+    tabla
+  }, align = "l")
   
   output$hist_accidents_total <- renderPlotly({
     df <- datos_filtrados() %>%
@@ -114,7 +182,7 @@ server <- function(input, output, session) {
     df <- datos_filtrados() %>%
       group_by(type_bikelane, category) %>%
       summarise(total_accidentes = n(), .groups = 'drop') %>%
-      left_join(longitud_carril(), by = c("type_bikelane" = "klasse")) %>%
+      left_join(longitud_carril, by = c("type_bikelane" = "klasse")) %>%
       mutate(accidentes_por_km = total_accidentes / total_km)
     
     plot_bars(df, "type_bikelane", "accidentes_por_km", "category",
@@ -156,18 +224,18 @@ server <- function(input, output, session) {
   })
   
   output$district_plot <- renderLeaflet({
-    # Asignar accidentes a distritos
+    # Asignamos accidentes a distritos
     accidentes_sf <- st_as_sf(datos_filtrados(), coords = c("lon", "lat"), crs = 4326)
     
-    # Unir accidentes con los distritos usando st_join
+    # Unimos accidentes con los distritos usando st_join
     accidentes_distrito_sf <- st_join(accidentes_sf, barrios, join = st_within)
     
-    # Contabilizar accidentes por distrito
+    # Contabilizamos accidentes por distrito
     accidentes_distrito <- accidentes_distrito_sf %>%
       group_by(stadtteil) %>%
       summarise(
         accidentes_distrito = n(),
-        bev = first(bev),  # tomar el primer valor de e_ha del distrito (todos deberían ser iguales)
+        bev = first(bev),  
         .groups = 'drop'
       )
     accidentes_distrito$por_poblacion <- accidentes_distrito$accidentes_distrito / accidentes_distrito$bev

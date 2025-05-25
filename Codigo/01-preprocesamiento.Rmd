@@ -2,7 +2,7 @@
 title: 'Análisis y predicción de los accidentes ciclistas en la ciudad de
   Hamburgo - Preprocesamiento'
 author: "Adrian Läufer"
-date: "2025-05-02"
+date: "Mayo 2025"
 output:
   html_document: 
   toc: true
@@ -46,11 +46,12 @@ library(dplyr)
 library(purrr)
 library(lubridate)
 library(readxl)
+library(rmapshaper)
 ```
 
 ## 1. Datos de accidentes
 
-Los datos utilizados sobre los accidentes en Alemania, han sido previamente descargados del portal destatis.de y han sido guardados en la carpeta Datos/Unfallatlas. Los archivos tienen todos un nombre y una estructura similar. Para cada año existe un zip donde se encuentra un archivo txt finalizado con _LinRef que contiene los datos de los accidentes. Para obtener los datos leemos este archivo y lo guardamos en una lista que posteriormente guardamos en un dataframe ("data_accidents") y en un csv.
+Los datos utilizados sobre los accidentes en Alemania, han sido previamente descargados del portal destatis.de y han sido guardados en la carpeta Datos/Unfallatlas. Los archivos tienen todos un nombre y una estructura similar. Para cada año existe un zip donde se encuentra un archivo .txt finalizado con "_LinRef" que contiene los datos de los accidentes. Para obtener los datos leemos este archivo y lo guardamos en una lista que posteriormente guardamos en un dataframe ("data_accidents") y en un csv.
 
 ```{r , echo=TRUE}
 ruta_base <- "../Datos/Unfallatlas/"
@@ -128,7 +129,7 @@ La variable ULAND define el estado donde ha pasado el accidente y IstRad define 
 accidents_bike_HH <- data_accidents %>% filter(ULAND == 2 & IstRad == 1)
 ```
 
-Los datos obtenidos hasta ahora, no incluyen el dia exacto cuando ocurrió el accidente, sino sólo el año, mes y día de la semana. Destatis nos facilitó posteriormente una tabla csv con la fecha exacta de los accidentes ocurridos entre 2020 y 2023. Para tener en cuenta esta información cargaremos la tabla mencionada y la uniremos según el identificador con la tabla anterior.
+Los datos obtenidos hasta ahora, no incluyen el dia exacto cuando ocurrió el accidente, sino sólo el año, mes y día de la semana. Destatis nos facilitó posteriormente una tabla .csv con la fecha exacta de los accidentes ocurridos entre 2020 y 2023. Para tener en cuenta esta información cargaremos la tabla mencionada y la uniremos según el identificador con la tabla anterior.
 
 ```{r, echo=TRUE}
 # Leemos la tabla
@@ -205,7 +206,7 @@ accidents_bike_HH <- accidents_bike_HH %>%
   ungroup()
 ```
 
-Una vez realizada esta operación, finalizamos el preprocesado de los datos de los accidentes de tráfico y lo guardamos en un csv por si hiciese falta recuperar los datos.
+Una vez realizada esta operación, finalizamos el preprocesado de los datos de los accidentes de tráfico y lo guardamos en un .csv por si hiciese falta recuperar los datos.
 
 ```{r , echo=TRUE}
 write.csv(accidents_bike_HH, "accidents_bike_HH.csv", row.names = TRUE)
@@ -249,13 +250,13 @@ st_crs(data_infra$geometry) <- 25832
 data_infra$geometry <- st_transform(data_infra$geometry, 4326)
 ```
 
-Una vez realizadas estas operaciones, podemos transformar el data frame en un objeto sf, que es el tipioc para representar información geoespacial en R.
+Una vez realizadas estas operaciones, podemos transformar el data frame en un objeto sf, que es el tipico para representar información geoespacial en R.
 
 ```{r , echo=TRUE}
 data_infra_sf <- st_as_sf(data_infra)
 ```
 
-En los datos de la infraestructura, el tipo de via ciclista es primordial. Para poder utilizarlo posteriormente en nuestro trabajo, traducimos los valores en alemán al castellano.
+En los datos de la infraestructura, el tipo de via ciclista es primordial. Para poder utilizarlo posteriormente en nuestro trabajo, traducimos los valores del alemán al castellano.
 
 ```{r, echo=TRUE}
 data_infra_sf <- data_infra_sf %>%
@@ -274,7 +275,7 @@ data_infra_sf <- data_infra_sf %>%
 
 ```
 
-Guardamos los datos de la infraestructura en un csv.
+Guardamos los datos de la infraestructura en un .csv.
 
 ```{r, echo=TRUE}
 # Guardamos en CSV
@@ -340,7 +341,7 @@ archivos_zip <- list.files(ruta_base, pattern = "\\.zip$", full.names = TRUE)
 ```
 
 
-Los archivos obtenidos se encuentran en formato zip. Dentro de los archivos zip se encuentra un archivo cuyo nombre contiene la palabra "produkt" que contiene la información. Para leer los archivos se crea una función que extraiga estos datos:
+Los archivos obtenidos se encuentran en formato .zip. Dentro de los archivos .zip se encuentra un archivo cuyo nombre contiene la palabra "produkt" que contiene la información. Para leer los archivos se crea una función que extraiga estos datos:
 
 ```{r, echo=TRUE}
 # Creamos una función para extraer los datos
@@ -400,7 +401,7 @@ lista_clima <- map(lista_clima, function(df) {
     # Forzamos a character (por si viene como factor o int)
     df$MESS_DATUM <- as.character(df$MESS_DATUM)
     
-    # Extraemos solo los primeros 10 caracteres (ignora lo que venga después)
+    # Extraemos solo los primeros 10 carácteres
     df$MESS_DATUM <- substr(df$MESS_DATUM, 1, 10)
     
     # Convertimos a integer
@@ -432,7 +433,7 @@ lista_clima <- lapply(lista_clima, function(df) {
   # Unimos todas las columnas a quitar
   cols_a_quitar <- union(cols_qn, cols_station)
   
-  # Eliminar
+  # Eliminamos las columnas
   df <- df[ , !(names(df) %in% cols_a_quitar)]
   return(df)
 })
@@ -501,7 +502,7 @@ Traducimos y simplificamos los valores en la variable "weather_description":
 ```{r , echo=TRUE}
 # Convertimos a character:
 data_clima$weather_description <- as.character(data_clima$weather_description)
-# Cambiamos los valores en la descripcion del tiempo
+# Cambiamos los valores en la descripción del tiempo
 data_clima$weather_description[grepl("Schneeregen", data_clima$weather_description)] <- "agua nieve"
 data_clima$weather_description[grepl("Schnee", data_clima$weather_description)] <- "nieve"
 data_clima$weather_description[grepl("Regen", data_clima$weather_description)] <- "lluvia"
@@ -583,7 +584,7 @@ write.csv(accidents_infrastructure_clima, "accidents_infrastructure_clima.csv", 
 
 ## 4. Datos del tráfico
 
-Los datos del tráfico ciclista han sido obtenidos para una única estación y han sido descargados en formato csv. A continuación se leen estos datos:
+Los datos del tráfico ciclista han sido obtenidos para una única estación y han sido descargados en formato .csv. A continuación se leen estos datos:
 ```{r , echo=TRUE}
 ruta_base <- "../Datos/Radverkehrsmengen/"
 
@@ -629,7 +630,7 @@ data_traffic$hour <- as.integer(substr(data_traffic$`Zeitraum (von)`, 1, 2))
 data_traffic <- data_traffic %>% select(-Datum, -`Zeitraum (von)`)
 ```
 
-Finalmente, guardamos los datos en un archivo csv antes de unirlos con los datos de los accidentes.
+Finalmente, guardamos los datos en un archivo .csv antes de unirlos con los datos de los accidentes.
 
 ```{r , echo=TRUE}
 write.csv(data_traffic, "data_traffic.csv", row.names = TRUE)
